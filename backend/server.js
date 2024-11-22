@@ -126,6 +126,10 @@ app.post("/check-credits", (req, res) => {
 app.post("/use-search", (req, res) => {
   const { email } = req.body;
 
+  console.log("Email received in /use-search:", email);
+  console.log("Current userCredits state:", userCredits);
+
+  // Check if user has credits available
   if (!userCredits[email] || userCredits[email] <= 0) {
     logger.info(`User ${email} attempted a search with no credits.`);
     return res.status(403).send({
@@ -144,19 +148,6 @@ app.post("/use-search", (req, res) => {
     message: "Search recorded successfully.",
     remainingCredits: userCredits[email],
   });
-});
-
-// Temporary Route: Reset Credits (for Debugging)
-app.post("/reset-credits", (req, res) => {
-  const { email } = req.body;
-
-  if (!email) {
-    return res.status(400).send({ error: { message: "Email is required" } });
-  }
-
-  userCredits[email] = 0; // Reset credits to 0
-  logger.info(`Credits reset for ${email}`);
-  res.status(200).send({ message: `Credits reset for ${email}` });
 });
 
 // Start server

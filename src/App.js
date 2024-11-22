@@ -50,7 +50,7 @@ const App = ({ signOut, user }) => {
           <Route path="/" element={<Dashboard userEmail={userEmail} />} />
 
           {/* Route for the form to perform searches */}
-          <Route path="/form" element={<InputForm />} />
+          <Route path="/form" element={<InputForm userEmail={userEmail} />} />
 
           {/* Route for purchasing pre-paid blocks */}
           <Route
