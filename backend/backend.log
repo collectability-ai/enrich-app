@@ -1,0 +1,66 @@
+{"level":"info","message":"Server initialized and Winston configured.","timestamp":"2024-11-21T22:15:13.372Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:19:33.255Z"}
+{"level":"error","message":"Error in /purchase-pack for s1transitioncontact@gmail.com: This PaymentIntent is configured to accept payment methods enabled in your Dashboard. Because some of these payment methods might redirect your customer off of your page, you must provide a `return_url`. If you don't want to accept redirect-based payment methods, set `automatic_payment_methods[enabled]` to `true` and `automatic_payment_methods[allow_redirects]` to `never` when creating Setup Intents and Payment Intents.","timestamp":"2024-11-21T22:19:41.999Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:22:31.187Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T22:23:03.039Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:23:03.043Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com. Credits added: 5. Total credits: 5","timestamp":"2024-11-21T22:23:20.661Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 4","timestamp":"2024-11-21T22:25:55.432Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T22:29:17.453Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:29:17.458Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T22:30:59.137Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:30:59.142Z"}
+{"level":"info","message":"Credits reset for s1transitioncontact@gmail.com","timestamp":"2024-11-21T22:31:12.984Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-21T22:31:39.474Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 10","timestamp":"2024-11-21T22:31:48.195Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 15","timestamp":"2024-11-21T22:31:51.362Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T22:46:53.912Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:46:53.917Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-21T22:47:17.530Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T22:51:56.921Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T22:51:56.926Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-21T22:53:14.082Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 10","timestamp":"2024-11-21T22:54:14.786Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 9","timestamp":"2024-11-21T22:54:54.594Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 8","timestamp":"2024-11-21T22:54:58.487Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 7","timestamp":"2024-11-21T22:55:00.110Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 6","timestamp":"2024-11-21T22:55:03.209Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 5","timestamp":"2024-11-21T22:55:04.078Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 4","timestamp":"2024-11-21T22:55:05.115Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 3","timestamp":"2024-11-21T22:55:05.989Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 2","timestamp":"2024-11-21T22:55:06.920Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 1","timestamp":"2024-11-21T22:55:07.854Z"}
+{"level":"info","message":"Search used for s1transitioncontact@gmail.com. Remaining credits: 0","timestamp":"2024-11-21T22:55:08.884Z"}
+{"level":"warn","message":"No remaining credits for s1transitioncontact@gmail.com","timestamp":"2024-11-21T22:55:13.363Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-21T23:04:58.994Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-21T23:04:58.999Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T01:48:31.106Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T01:48:31.110Z"}
+{"level":"error","message":"Error purchasing pack for s1transitioncontact@gmail.com: This PaymentIntent is configured to accept payment methods enabled in your Dashboard. Because some of these payment methods might redirect your customer off of your page, you must provide a `return_url`. If you don't want to accept redirect-based payment methods, set `automatic_payment_methods[enabled]` to `true` and `automatic_payment_methods[allow_redirects]` to `never` when creating Setup Intents and Payment Intents.","timestamp":"2024-11-22T01:55:00.972Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T02:36:48.624Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T02:36:48.629Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T03:17:49.329Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T03:17:49.333Z"}
+{"level":"error","message":"Error purchasing pack for s1transitioncontact@gmail.com: This PaymentIntent is configured to accept payment methods enabled in your Dashboard. Because some of these payment methods might redirect your customer off of your page, you must provide a `return_url`. If you don't want to accept redirect-based payment methods, set `automatic_payment_methods[enabled]` to `true` and `automatic_payment_methods[allow_redirects]` to `never` when creating Setup Intents and Payment Intents.","timestamp":"2024-11-22T03:19:48.977Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T03:21:51.739Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T03:21:51.744Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T03:22:14.895Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 10","timestamp":"2024-11-22T03:22:55.966Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T04:25:32.787Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T04:25:32.792Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:25:43.352Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T04:27:25.139Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T04:27:25.145Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:27:38.530Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T04:27:58.755Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T04:28:18.834Z"}
+{"level":"info","message":"User s1transitioncontact@gmail.com used a search. Remaining credits: 4","timestamp":"2024-11-22T04:28:27.121Z"}
+{"level":"info","message":"User s1transitioncontact@gmail.com used a search. Remaining credits: 3","timestamp":"2024-11-22T04:28:28.907Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 3","timestamp":"2024-11-22T04:28:37.620Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 8","timestamp":"2024-11-22T04:29:10.329Z"}
+{"level":"info","message":"User s1transitioncontact@gmail.com used a search. Remaining credits: 7","timestamp":"2024-11-22T04:29:19.448Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 7","timestamp":"2024-11-22T04:29:26.754Z"}
+{"level":"info","message":"Credits reset for s1transitioncontact@gmail.com","timestamp":"2024-11-22T04:30:48.964Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:31:11.941Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:31:23.241Z"}
+{"level":"info","message":"User s1transitioncontact@gmail.com attempted a search with no credits.","timestamp":"2024-11-22T04:31:35.507Z"}
