@@ -4,6 +4,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY); // Use the secret key from the environment variable
 const winston = require("winston");
+const cors = require("cors"); // Import CORS
 
 // Initialize Winston logger (existing code)
 const logger = winston.createLogger({
@@ -22,6 +23,16 @@ const logger = winston.createLogger({
 const app = express();
 const port = 5000;
 
+// Add CORS Middleware
+app.use(
+  cors({
+    origin: "http://localhost:3000", // Allow your frontend's origin
+    methods: ["GET", "POST"], // Allowed HTTP methods
+    credentials: true, // Allow cookies to be sent
+  })
+);
+
+// Add JSON parsing middleware
 app.use(bodyParser.json());
 
 // Initialize user credits tracking
