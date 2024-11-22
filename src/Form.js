@@ -1,67 +1,64 @@
 import React, { useState } from "react";
 
-const API_URL = "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidate";
-
-const Form = () => {
-  const [formData, setFormData] = useState({
-    FirstName: "",
-    LastName: "",
-    Phone: "",
-    Email: "",
-    Address: {
-      street: "",
-      city: "",
-      state: "",
-      zip: "",
-    },
-  });
-
-  const [response, setResponse] = useState(null);
-  const [error, setError] = useState(null);
+const Form = ({ user }) => {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
+  const [responseData, setResponseData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Handle form input changes
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    // If the input is for the Address object
-    if (["street", "city", "state", "zip"].includes(name)) {
-      setFormData((prevData) => ({
-        ...prevData,
-        Address: {
-          ...prevData.Address,
-          [name]: value,
-        },
-      }));
-    } else {
-      setFormData((prevData) => ({
-        ...prevData,
-        [name]: value,
-      }));
-    }
-  };
-
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(API_URL, {
+      // Call the enrichment API
+      const response = await fetch("http://localhost:5000/search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          email: user.email, // Use the logged-in user's email
+          searchParams: {
+            FirstName: firstName,
+            LastName: lastName,
+            Address: {
+              street: street,
+              city: city,
+              state: state,
+              zip: zip,
+            },
+          },
+        }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Error: ${res.status} ${res.statusText}`);
-      }
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error.message);
 
-      const data = await res.json();
-      setResponse(data);
+      setResponseData(result);
+
+      // Report usage to Stripe
+      const usageResponse = await fetch("http://localhost:5000/report-usage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: user.email, // Use the logged-in user's email
+          usage: 1, // Increment usage by 1
+        }),
+      });
+
+      const usageResult = await usageResponse.json();
+      if (!usageResponse.ok) throw new Error(usageResult.error.message);
+
+      console.log("Usage reported successfully:", usageResult.message);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -70,15 +67,15 @@ const Form = () => {
   };
 
   return (
-    <div style={{ marginTop: "20px" }}>
+    <div>
+      <h1>Enrich and Validate</h1>
       <form onSubmit={handleSubmit}>
         <div>
           <label>First Name:</label>
           <input
             type="text"
-            name="FirstName"
-            value={formData.FirstName}
-            onChange={handleChange}
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
             required
           />
         </div>
@@ -86,66 +83,45 @@ const Form = () => {
           <label>Last Name:</label>
           <input
             type="text"
-            name="LastName"
-            value={formData.LastName}
-            onChange={handleChange}
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
             required
           />
         </div>
         <div>
-          <label>Phone:</label>
-          <input
-            type="tel"
-            name="Phone"
-            value={formData.Phone}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <label>Email:</label>
-          <input
-            type="email"
-            name="Email"
-            value={formData.Email}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <h3>Address</h3>
-        <div>
-          <label>Street:</label>
+          <label>Street Address:</label>
           <input
             type="text"
-            name="street"
-            value={formData.Address.street}
-            onChange={handleChange}
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            required
           />
         </div>
         <div>
           <label>City:</label>
           <input
             type="text"
-            name="city"
-            value={formData.Address.city}
-            onChange={handleChange}
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            required
           />
         </div>
         <div>
           <label>State:</label>
           <input
             type="text"
-            name="state"
-            value={formData.Address.state}
-            onChange={handleChange}
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            required
           />
         </div>
         <div>
-          <label>ZIP:</label>
+          <label>ZIP Code:</label>
           <input
             type="text"
-            name="zip"
-            value={formData.Address.zip}
-            onChange={handleChange}
+            value={zip}
+            onChange={(e) => setZip(e.target.value)}
+            required
           />
         </div>
         <button type="submit" disabled={loading}>
@@ -153,17 +129,12 @@ const Form = () => {
         </button>
       </form>
 
-      {response && (
-        <div style={{ marginTop: "20px", textAlign: "left" }}>
-          <h3>Response:</h3>
-          <pre>{JSON.stringify(response, null, 2)}</pre>
-        </div>
-      )}
+      {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
-      {error && (
-        <div style={{ marginTop: "20px", color: "red" }}>
-          <h3>Error:</h3>
-          <p>{error}</p>
+      {responseData && (
+        <div>
+          <h2>API Response:</h2>
+          <pre>{JSON.stringify(responseData, null, 2)}</pre>
         </div>
       )}
     </div>
