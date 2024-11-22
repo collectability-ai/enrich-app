@@ -64,3 +64,6 @@
 {"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:31:11.941Z"}
 {"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T04:31:23.241Z"}
 {"level":"info","message":"User s1transitioncontact@gmail.com attempted a search with no credits.","timestamp":"2024-11-22T04:31:35.507Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T04:51:33.792Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T04:51:33.797Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T04:52:16.116Z"}
