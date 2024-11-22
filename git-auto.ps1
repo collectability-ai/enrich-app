@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.0.2"
-$description = "Stable Backend with frontend credit purchase verified for logged in user"
+$version = "v1.0.3"
+$description = "Front end fully functional. Search successful - results returned."
 
 # Add all changes
 git add .
