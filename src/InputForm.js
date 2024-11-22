@@ -31,7 +31,7 @@ const InputForm = ({ userEmail }) => {
     setResponseData(null);
 
     try {
-      // Log the payload being sent to the API
+      // Log payload being sent to the API
       console.log("Payload sent to Enrich and Validate API:", {
         FirstName: formData.firstName,
         LastName: formData.lastName,
@@ -66,21 +66,26 @@ const InputForm = ({ userEmail }) => {
       const enrichData = enrichResponse.data;
       console.log("API Response from Enrich and Validate:", enrichData);
 
-      // If no data is returned, display a message and stop further actions
+      // If no data is returned, stop further processing
       if (!enrichData || Object.keys(enrichData).length === 0) {
         setMessage("No data found. No credit deducted.");
         return;
       }
 
-      // Step 2: Call /use-search to deduct a credit
-      console.log("Payload sent to /use-search:", { email: userEmail });
-      const deductResponse = await axios.post("http://localhost:5000/use-search", {
+      // Step 2: Deduct credit using /use-search
+      const useSearchPayload = {
         email: userEmail,
-      });
+        searchQuery: formData,
+        apiResponse: enrichData,
+      };
+
+      console.log("Payload sent to /use-search:", useSearchPayload);
+
+      const deductResponse = await axios.post("http://localhost:5000/use-search", useSearchPayload);
 
       console.log("Credit Deduction Response:", deductResponse.data);
 
-      // Step 3: Display results and success message
+      // Step 3: Update UI with results and success message
       setResponseData(enrichData);
       setMessage(deductResponse.data.message || "Search recorded successfully.");
     } catch (err) {

@@ -8,10 +8,14 @@ import { loadStripe } from "@stripe/stripe-js";
 import CheckoutForm from "./CheckoutForm";
 import InputForm from "./InputForm";
 import Dashboard from "./Dashboard";
+import SearchHistory from "./SearchHistory";
+import axios from "axios"; // Import axios for HTTP requests
 
 Amplify.configure(awsconfig);
 
-const stripePromise = loadStripe("pk_test_51MjjjZAUGHTClvwysxBzvOL23fSDEGZcXqjogH5LDGAQcqRgBXQAljU4zBE0gxTaxUVI6dTgXDssKfl7nfRi9xcd00XlLSh1Qh");
+const stripePromise = loadStripe(
+  "pk_test_51MjjjZAUGHTClvwysxBzvOL23fSDEGZcXqjogH5LDGAQcqRgBXQAljU4zBE0gxTaxUVI6dTgXDssKfl7nfRi9xcd00XlLSh1Qh"
+);
 
 const App = ({ signOut, user }) => {
   // Extract logged-in user's email
@@ -21,6 +25,18 @@ const App = ({ signOut, user }) => {
   useEffect(() => {
     console.log("Full User Object:", JSON.stringify(user, null, 2));
     console.log("Extracted Email:", userEmail);
+
+    // Test axios integration (optional: remove this after confirming it works)
+    const testAxios = async () => {
+      try {
+        const response = await axios.post("http://localhost:5000/check-credits", { email: userEmail });
+        console.log("Axios Test Response:", response.data);
+      } catch (error) {
+        console.error("Axios Test Error:", error.response?.data || error.message);
+      }
+    };
+
+    testAxios();
   }, [user, userEmail]);
 
   return (
@@ -43,11 +59,17 @@ const App = ({ signOut, user }) => {
           <Link to="/purchase-pack" style={{ margin: "10px", textDecoration: "none" }}>
             <Button>Purchase Pack</Button>
           </Link>
+          <Link to="/search-history" style={{ margin: "10px", textDecoration: "none" }}>
+            <Button>Search History</Button>
+          </Link>
         </div>
 
         <Routes>
           {/* Dashboard route */}
           <Route path="/" element={<Dashboard userEmail={userEmail} />} />
+
+          {/* Search History route */}
+          <Route path="/search-history" element={<SearchHistory userEmail={userEmail} />} />
 
           {/* Route for the form to perform searches */}
           <Route path="/form" element={<InputForm userEmail={userEmail} />} />

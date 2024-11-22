@@ -146,3 +146,19 @@
 {"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:25:53.324Z"}
 {"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:25:53.330Z"}
 {"level":"error","message":"Error purchasing pack for s1transitioncontact@gmail.com: User: arn:aws:iam::791922540057:user/amplify-dev is not authorized to perform: dynamodb:GetItem on resource: arn:aws:dynamodb:us-east-2:791922540057:table/EnV_UserCredits because no identity-based policy allows the dynamodb:GetItem action","timestamp":"2024-11-22T07:26:03.684Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:30:13.102Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:30:13.107Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T07:30:30.399Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:49:22.096Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:49:22.101Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:58:34.886Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:58:34.891Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T08:02:44.391Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T20:47:18.023Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T20:47:18.027Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T21:32:56.604Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T21:32:56.608Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T21:48:34.912Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T21:48:34.916Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T22:28:23.153Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T22:28:23.159Z"}

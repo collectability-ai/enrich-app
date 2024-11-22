@@ -6,7 +6,8 @@ const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
 const winston = require("winston");
 const cors = require("cors");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const axios = require("axios"); // For backend (Node.js)
 
 // Configure DynamoDB Client
 const dynamoDBClient = new DynamoDBClient({ region: "us-east-2" });
@@ -49,19 +50,22 @@ async function updateUserCredits(email, credits) {
   }
 }
 
-async function logSearchHistory(email, searchQuery, apiResponse) {
+async function logSearchHistory(email, searchQuery, requestID, status, rawResponse = null) {
   const params = {
-    TableName: SEARCH_HISTORY_TABLE,
+    TableName: "EnV_SearchHistory",
     Item: {
-      email,
-      timestamp: Date.now(),
-      searchQuery,
-      apiResponse,
+      requestID, // Unique identifier for the request
+      email, // User who submitted the search
+      timestamp: new Date().toISOString(), // ISO formatted timestamp
+      searchQuery, // Search query input (form data)
+      status, // "success" or the error message
+      rawResponse: rawResponse || "N/A", // Raw API response (null if unsuccessful)
     },
   };
 
   try {
     await dynamoDBDocClient.send(new PutCommand(params));
+    console.log("Search history logged successfully.");
   } catch (error) {
     console.error("Error logging search history:", error);
     throw error;
@@ -88,7 +92,7 @@ const port = 5000;
 // Add CORS Middleware
 app.use(
   cors({
-    origin: "http://localhost:3000", // Allow your frontend's origin
+    origin: "http://localhost:3000",
     methods: ["GET", "POST"],
     credentials: true,
   })
@@ -105,7 +109,6 @@ app.post("/purchase-pack", async (req, res) => {
   const { email, priceId, paymentMethodId } = req.body;
 
   try {
-    // Find or create customer
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
@@ -113,7 +116,6 @@ app.post("/purchase-pack", async (req, res) => {
       customer = await stripe.customers.create({ email });
     }
 
-    // Check for existing default payment method
     let paymentMethod = paymentMethodId || customer.invoice_settings.default_payment_method;
 
     if (!paymentMethod) {
@@ -122,7 +124,6 @@ app.post("/purchase-pack", async (req, res) => {
       });
     }
 
-    // Determine the amount and credits based on priceId
     const packOptions = {
       "price_1QNgCzAUGHTClvwyfnBxMXtF": { amount: 500, credits: 5 },
       "price_1QNgCzAUGHTClvwyl3xyl6K2": { amount: 2500, credits: 25 },
@@ -136,20 +137,15 @@ app.post("/purchase-pack", async (req, res) => {
       return res.status(400).send({ error: { message: "Invalid price ID" } });
     }
 
-    // Create a PaymentIntent with the existing payment method
     const paymentIntent = await stripe.paymentIntents.create({
       amount: pack.amount,
       currency: "usd",
       customer: customer.id,
       payment_method: paymentMethod,
       confirm: true,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // Explicitly disable redirect-based methods
-      },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
 
-    // Add credits to the user in DynamoDB
     const currentCredits = await getUserCredits(email);
     await updateUserCredits(email, currentCredits + pack.credits);
 
@@ -179,30 +175,71 @@ app.post("/check-credits", async (req, res) => {
 
 // Route: Use a Search
 app.post("/use-search", async (req, res) => {
-  const { email, searchQuery, apiResponse } = req.body;
+  const { email, searchQuery } = req.body;
 
   try {
+    // Check user credits
     const credits = await getUserCredits(email);
 
     if (credits <= 0) {
+      const errorMessage = "No remaining credits. Please purchase a new pack.";
+      await logSearchHistory(email, searchQuery, "N/A", errorMessage);
       return res.status(403).send({
         error: {
-          message: "No remaining credits. Please purchase a new pack.",
+          message: errorMessage,
           purchaseRequired: true,
         },
       });
     }
 
+    // Payload for the Lambda function
+    const payload = {
+      FirstName: searchQuery.firstName,
+      LastName: searchQuery.lastName,
+      Email: searchQuery.email,
+      Phone: searchQuery.phone,
+      Address: {
+        addressLine1: searchQuery.addressLine1,
+        city: searchQuery.city,
+        state: searchQuery.state,
+        zip: searchQuery.zip,
+      },
+    };
+
+    console.log("Payload sent to Lambda:", payload);
+
+    // Call the Enrich and Validate API
+    const lambdaResponse = await axios.post(
+      "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidate",
+      payload,
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    const enrichData = lambdaResponse.data;
+    console.log("Lambda API Response:", enrichData);
+
+    if (!enrichData || !enrichData.requestID) {
+      const errorMessage = "Failed to get data from Enrich and Validate API.";
+      await logSearchHistory(email, searchQuery, "N/A", errorMessage);
+      return res.status(500).send({ error: { message: errorMessage } });
+    }
+
+    // Deduct one credit
     await updateUserCredits(email, credits - 1);
-    await logSearchHistory(email, searchQuery, apiResponse);
+
+    // Log search history
+    await logSearchHistory(email, searchQuery, enrichData.requestID, "Success");
 
     res.status(200).send({
-      message: "Search recorded successfully.",
+      message: "Search successful.",
       remainingCredits: credits - 1,
+      data: enrichData,
     });
-  } catch (err) {
-    console.error("Error during search:", err.message);
-    res.status(500).send({ error: { message: "Internal server error" } });
+  } catch (error) {
+    console.error("Error during search:", error.message);
+    res.status(500).send({ error: { message: "Internal Server Error" } });
   }
 });
 
