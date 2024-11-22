@@ -2,11 +2,73 @@ require("dotenv").config(); // Load environment variables at the very top
 
 const express = require("express");
 const bodyParser = require("body-parser");
-const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY); // Use the secret key from the environment variable
+const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
 const winston = require("winston");
-const cors = require("cors"); // Import CORS
+const cors = require("cors");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand } = require("@aws-sdk/lib-dynamodb");
 
-// Initialize Winston logger (existing code)
+// Configure DynamoDB Client
+const dynamoDBClient = new DynamoDBClient({ region: "us-east-2" });
+const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
+
+// Table Names
+const USER_CREDITS_TABLE = "EnV_UserCredits";
+const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
+
+// Utility Functions
+async function getUserCredits(email) {
+  const params = {
+    TableName: USER_CREDITS_TABLE,
+    Key: { email },
+  };
+
+  try {
+    const result = await dynamoDBDocClient.send(new GetCommand(params));
+    return result.Item ? result.Item.credits : 0; // Default to 0 if no record exists
+  } catch (error) {
+    console.error("Error fetching user credits:", error);
+    throw error;
+  }
+}
+
+async function updateUserCredits(email, credits) {
+  const params = {
+    TableName: USER_CREDITS_TABLE,
+    Key: { email },
+    UpdateExpression: "SET credits = :credits",
+    ExpressionAttributeValues: { ":credits": credits },
+    ReturnValues: "UPDATED_NEW",
+  };
+
+  try {
+    await dynamoDBDocClient.send(new UpdateCommand(params));
+  } catch (error) {
+    console.error("Error updating user credits:", error);
+    throw error;
+  }
+}
+
+async function logSearchHistory(email, searchQuery, apiResponse) {
+  const params = {
+    TableName: SEARCH_HISTORY_TABLE,
+    Item: {
+      email,
+      timestamp: Date.now(),
+      searchQuery,
+      apiResponse,
+    },
+  };
+
+  try {
+    await dynamoDBDocClient.send(new PutCommand(params));
+  } catch (error) {
+    console.error("Error logging search history:", error);
+    throw error;
+  }
+}
+
+// Initialize Winston logger
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -27,23 +89,20 @@ const port = 5000;
 app.use(
   cors({
     origin: "http://localhost:3000", // Allow your frontend's origin
-    methods: ["GET", "POST"], // Allowed HTTP methods
-    credentials: true, // Allow cookies to be sent
+    methods: ["GET", "POST"],
+    credentials: true,
   })
 );
 
 // Add JSON parsing middleware
 app.use(bodyParser.json());
 
-// Initialize user credits tracking
-let userCredits = {};
-
 // Log server initialization
 logger.info("Server initialized.");
 
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
-  const { email, priceId } = req.body;
+  const { email, priceId, paymentMethodId } = req.body;
 
   try {
     // Find or create customer
@@ -55,9 +114,9 @@ app.post("/purchase-pack", async (req, res) => {
     }
 
     // Check for existing default payment method
-    let paymentMethodId = customer.invoice_settings.default_payment_method;
+    let paymentMethod = paymentMethodId || customer.invoice_settings.default_payment_method;
 
-    if (!paymentMethodId) {
+    if (!paymentMethod) {
       return res.status(400).send({
         error: { message: "No default payment method on file. Please add one." },
       });
@@ -82,24 +141,22 @@ app.post("/purchase-pack", async (req, res) => {
       amount: pack.amount,
       currency: "usd",
       customer: customer.id,
-      payment_method: paymentMethodId,
+      payment_method: paymentMethod,
       confirm: true,
-      automatic_payment_methods: { 
+      automatic_payment_methods: {
         enabled: true,
-        allow_redirects: "never" 
+        allow_redirects: "never", // Explicitly disable redirect-based methods
       },
     });
 
-    // Add credits to the user
-    if (!userCredits[email]) {
-      userCredits[email] = 0;
-    }
-    userCredits[email] += pack.credits;
+    // Add credits to the user in DynamoDB
+    const currentCredits = await getUserCredits(email);
+    await updateUserCredits(email, currentCredits + pack.credits);
 
-    logger.info(`Credits updated for ${email}: ${userCredits[email]}`);
+    logger.info(`Credits updated for ${email}: ${currentCredits + pack.credits}`);
     res.status(200).send({
       message: "Pack purchased successfully.",
-      remainingCredits: userCredits[email],
+      remainingCredits: currentCredits + pack.credits,
     });
   } catch (err) {
     logger.error(`Error purchasing pack for ${email}: ${err.message}`);
@@ -108,46 +165,45 @@ app.post("/purchase-pack", async (req, res) => {
 });
 
 // Route: Check or Fetch Credits
-app.post("/check-credits", (req, res) => {
+app.post("/check-credits", async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
-    return res.status(400).send({ error: { message: "Email is required" } });
+  try {
+    const credits = await getUserCredits(email);
+    res.status(200).send({ email, credits });
+  } catch (err) {
+    console.error("Error checking credits:", err.message);
+    res.status(500).send({ error: { message: "Internal server error" } });
   }
-
-  const credits = userCredits[email] || 0; // Default to 0 if no credits
-  logger.info(`Credits checked for ${email}: ${credits}`);
-  
-  // Ensure no modification occurs
-  res.status(200).send({ email, remainingCredits: credits });
 });
 
 // Route: Use a Search
-app.post("/use-search", (req, res) => {
-  const { email } = req.body;
+app.post("/use-search", async (req, res) => {
+  const { email, searchQuery, apiResponse } = req.body;
 
-  console.log("Email received in /use-search:", email);
-  console.log("Current userCredits state:", userCredits);
+  try {
+    const credits = await getUserCredits(email);
 
-  // Check if user has credits available
-  if (!userCredits[email] || userCredits[email] <= 0) {
-    logger.info(`User ${email} attempted a search with no credits.`);
-    return res.status(403).send({
-      error: {
-        message: "No remaining credits. Please purchase a new pack.",
-        purchaseRequired: true,
-      },
+    if (credits <= 0) {
+      return res.status(403).send({
+        error: {
+          message: "No remaining credits. Please purchase a new pack.",
+          purchaseRequired: true,
+        },
+      });
+    }
+
+    await updateUserCredits(email, credits - 1);
+    await logSearchHistory(email, searchQuery, apiResponse);
+
+    res.status(200).send({
+      message: "Search recorded successfully.",
+      remainingCredits: credits - 1,
     });
+  } catch (err) {
+    console.error("Error during search:", err.message);
+    res.status(500).send({ error: { message: "Internal server error" } });
   }
-
-  // Deduct one credit
-  userCredits[email] -= 1;
-
-  logger.info(`User ${email} used a search. Remaining credits: ${userCredits[email]}`);
-  res.status(200).send({
-    message: "Search recorded successfully.",
-    remainingCredits: userCredits[email],
-  });
 });
 
 // Start server
