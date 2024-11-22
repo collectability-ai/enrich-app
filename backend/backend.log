@@ -130,3 +130,19 @@
 {"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T06:44:02.072Z"}
 {"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T06:44:02.074Z"}
 {"level":"info","message":"User undefined attempted a search with no credits.","timestamp":"2024-11-22T06:45:31.635Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T06:53:31.565Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T06:53:31.571Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T06:53:47.805Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 0","timestamp":"2024-11-22T06:53:47.819Z"}
+{"level":"info","message":"Credits updated for s1transitioncontact@gmail.com: 5","timestamp":"2024-11-22T06:53:53.441Z"}
+{"level":"info","message":"User s1transitioncontact@gmail.com used a search. Remaining credits: 4","timestamp":"2024-11-22T06:54:13.055Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 4","timestamp":"2024-11-22T06:54:34.647Z"}
+{"level":"info","message":"Credits checked for s1transitioncontact@gmail.com: 4","timestamp":"2024-11-22T06:54:34.649Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:07:40.579Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:07:40.585Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:21:22.176Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:21:22.181Z"}
+{"level":"error","message":"Error purchasing pack for s1transitioncontact@gmail.com: This PaymentIntent is configured to accept payment methods enabled in your Dashboard. Because some of these payment methods might redirect your customer off of your page, you must provide a `return_url`. If you don't want to accept redirect-based payment methods, set `automatic_payment_methods[enabled]` to `true` and `automatic_payment_methods[allow_redirects]` to `never` when creating Setup Intents and Payment Intents.","timestamp":"2024-11-22T07:23:15.608Z"}
+{"level":"info","message":"Server initialized.","timestamp":"2024-11-22T07:25:53.324Z"}
+{"level":"info","message":"Server running on port 5000","timestamp":"2024-11-22T07:25:53.330Z"}
+{"level":"error","message":"Error purchasing pack for s1transitioncontact@gmail.com: User: arn:aws:iam::791922540057:user/amplify-dev is not authorized to perform: dynamodb:GetItem on resource: arn:aws:dynamodb:us-east-2:791922540057:table/EnV_UserCredits because no identity-based policy allows the dynamodb:GetItem action","timestamp":"2024-11-22T07:26:03.684Z"}
