@@ -7,8 +7,7 @@ import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import CheckoutForm from "./CheckoutForm";
 import InputForm from "./InputForm";
-import Dashboard from "./Dashboard";
-import SearchHistory from "./SearchHistory";
+import Dashboard from "./Dashboard"; // Combines CreditsRemaining and SearchHistory
 import axios from "axios"; // Import axios for HTTP requests
 
 Amplify.configure(awsconfig);
@@ -59,17 +58,11 @@ const App = ({ signOut, user }) => {
           <Link to="/purchase-pack" style={{ margin: "10px", textDecoration: "none" }}>
             <Button>Purchase Pack</Button>
           </Link>
-          <Link to="/search-history" style={{ margin: "10px", textDecoration: "none" }}>
-            <Button>Search History</Button>
-          </Link>
         </div>
 
         <Routes>
           {/* Dashboard route */}
           <Route path="/" element={<Dashboard userEmail={userEmail} />} />
-
-          {/* Search History route */}
-          <Route path="/search-history" element={<SearchHistory userEmail={userEmail} />} />
 
           {/* Route for the form to perform searches */}
           <Route path="/form" element={<InputForm userEmail={userEmail} />} />

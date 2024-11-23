@@ -6,8 +6,16 @@ const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
 const winston = require("winston");
 const cors = require("cors");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+const {
+  DynamoDBDocumentClient,
+  GetCommand,
+  UpdateCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand, // Added for fetching search history
+} = require("@aws-sdk/lib-dynamodb");
 const axios = require("axios"); // For backend (Node.js)
+
 
 // Configure DynamoDB Client
 const dynamoDBClient = new DynamoDBClient({ region: "us-east-2" });
@@ -52,7 +60,7 @@ async function updateUserCredits(email, credits) {
 
 async function logSearchHistory(email, searchQuery, requestID, status, rawResponse = null) {
   const params = {
-    TableName: "EnV_SearchHistory",
+    TableName: SEARCH_HISTORY_TABLE,
     Item: {
       requestID, // Partition key: Unique ID for the search
       email, // User email
@@ -178,7 +186,6 @@ app.post("/use-search", async (req, res) => {
   const { email, searchQuery } = req.body;
 
   try {
-    // Step 1: Validate user credits
     const credits = await getUserCredits(email);
     if (credits <= 0) {
       const errorMessage = "No remaining credits. Please purchase a new pack.";
@@ -191,7 +198,6 @@ app.post("/use-search", async (req, res) => {
       });
     }
 
-    // Step 2: Construct payload for Enrich and Validate API
     const payload = {
       FirstName: searchQuery.firstName,
       LastName: searchQuery.lastName,
@@ -205,52 +211,35 @@ app.post("/use-search", async (req, res) => {
       },
     };
 
-    console.log("Payload sent to Enrich and Validate API:", payload);
-
-    // Step 3: Call the Enrich and Validate API
     const lambdaResponse = await axios.post(
       "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidate",
       payload,
-      {
-        headers: { "Content-Type": "application/json" },
-      }
+      { headers: { "Content-Type": "application/json" } }
     );
 
     const enrichData = lambdaResponse.data;
-    console.log("API Response from Enrich and Validate:", enrichData);
 
-    // Step 4: Validate API response
     if (!enrichData || !enrichData.requestID) {
       const errorMessage = "Failed to get valid data from Enrich and Validate API.";
       await logSearchHistory(email, searchQuery, "N/A", errorMessage);
       return res.status(500).send({ error: { message: errorMessage } });
     }
 
-    // Step 5: Deduct one credit
     await updateUserCredits(email, credits - 1);
-
-    // Step 6: Log search history with corrected partition key
-    const dynamoDBRequestID = enrichData.requestID; // Use the API requestID as the partition key
-
     await logSearchHistory(
       email,
       searchQuery,
-      dynamoDBRequestID, // Ensure the correct requestID from the API is used as the partition key
+      enrichData.requestID,
       "Success",
-      {
-        ...enrichData,
-        requestID: undefined, // Exclude the requestID field from raw response to avoid duplication
-      }
+      enrichData
     );
 
-    // Step 7: Return success response
     res.status(200).send({
       message: "Search successful.",
       remainingCredits: credits - 1,
       data: enrichData,
     });
   } catch (error) {
-    // Step 8: Handle errors gracefully
     console.error("Error during search:", error.message);
     await logSearchHistory(
       email,
@@ -258,6 +247,31 @@ app.post("/use-search", async (req, res) => {
       "N/A",
       error.message || "Internal Server Error"
     );
+    res.status(500).send({ error: { message: "Internal Server Error" } });
+  }
+});
+
+// Route: Get Search History
+app.post("/get-search-history", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).send({ error: { message: "Email is required" } });
+  }
+
+  const params = {
+    TableName: SEARCH_HISTORY_TABLE,
+    FilterExpression: "email = :email",
+    ExpressionAttributeValues: {
+      ":email": email,
+    },
+  };
+
+  try {
+    const data = await dynamoDBDocClient.send(new ScanCommand(params));
+    res.status(200).send({ history: data.Items || [] });
+  } catch (error) {
+    console.error("Error fetching search history:", error);
     res.status(500).send({ error: { message: "Internal Server Error" } });
   }
 });
