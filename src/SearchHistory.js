@@ -1,76 +1,154 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 
 const SearchHistory = ({ userEmail }) => {
-  const [history, setHistory] = useState([]);
-  const [selectedResponse, setSelectedResponse] = useState(null);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [rawResponse, setRawResponse] = useState(null);
 
   useEffect(() => {
-    // Fetch search history
-    const fetchHistory = async () => {
+    const fetchSearchHistory = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         const response = await axios.post("http://localhost:5000/get-search-history", {
           email: userEmail,
         });
-        setHistory(response.data.history || []);
-      } catch (error) {
-        console.error("Error fetching search history:", error);
+        setSearchHistory(response.data.history || []);
+      } catch (err) {
+        console.error("Error fetching search history:", err.message);
+        setError(err.response?.data?.error?.message || "Failed to fetch search history.");
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchHistory();
+    fetchSearchHistory();
   }, [userEmail]);
 
-  return (
-    <div style={{ padding: "20px" }}>
-      <h2>Search History</h2>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ border: "1px solid #ccc", padding: "8px" }}>Timestamp</th>
-            <th style={{ border: "1px solid #ccc", padding: "8px" }}>Search Query</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((entry, index) => (
-            <tr key={index}>
-              <td
-                style={{ border: "1px solid #ccc", padding: "8px", color: "blue", cursor: "pointer" }}
-                onClick={() => setSelectedResponse(entry.apiResponse)}
-              >
-                {new Date(entry.timestamp).toLocaleString()}
-              </td>
-              <td style={{ border: "1px solid #ccc", padding: "8px" }}>
-                {JSON.stringify(entry.searchQuery)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+const handleRowClick = (rawResponseData) => {
+  try {
+    const parsedResponse = JSON.parse(rawResponseData);
+    setRawResponse(parsedResponse);
+  } catch (err) {
+    console.error("Failed to parse raw response:", err);
+    setRawResponse(rawResponseData); // Fallback to original data if parsing fails
+  }
+};
 
-      {selectedResponse && (
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "white",
-            padding: "20px",
-            border: "1px solid #ccc",
-            borderRadius: "8px",
-            zIndex: 1000,
-          }}
-        >
-          <h3>API Response</h3>
-          <pre style={{ background: "#f4f4f4", padding: "10px", borderRadius: "5px" }}>
-            {JSON.stringify(selectedResponse, null, 2)}
-          </pre>
-          <button onClick={() => setSelectedResponse(null)} style={{ marginTop: "10px" }}>
-            Close
-          </button>
-        </div>
+  const handleClosePopup = (e) => {
+    if (e.target.id === "popup-overlay") {
+      setRawResponse(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2 style={{ textAlign: "center" }}>Search History</h2>
+      {loading ? (
+        <p>Loading search history...</p>
+      ) : error ? (
+        <p style={{ color: "red" }}>Error: {error}</p>
+      ) : searchHistory.length === 0 ? (
+        <p>No search history available.</p>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "20px" }}>
+          <thead>
+            <tr>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Timestamp</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>First Name</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Last Name</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Email</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Phone</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Address</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>City</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>State</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Zip</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Status</th>
+              <th style={{ border: "1px solid black", padding: "10px" }}>Request ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {searchHistory.map((entry) => (
+              <tr
+                key={entry.requestID}
+                style={{ cursor: "pointer" }}
+                onClick={() => handleRowClick(entry.rawResponse)}
+              >
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.timestamp}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.firstName || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.lastName || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.email || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.phone || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.addressLine1 || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.city || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.state || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.zip || "N/A"}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.status}</td>
+                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.requestID}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
+
+     {rawResponse && (
+  <div
+    id="popup-overlay"
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000,
+    }}
+    onClick={handleClosePopup}
+  >
+    <div
+      style={{
+        background: "white",
+        padding: "20px",
+        borderRadius: "8px",
+        maxWidth: "80%",
+        maxHeight: "80%",
+        overflowY: "auto",
+        textAlign: "left", // Ensures left alignment
+      }}
+    >
+      <h3 style={{ textAlign: "center" }}>Raw Response</h3>
+      <pre
+        style={{
+          whiteSpace: "pre-wrap",
+          wordWrap: "break-word",
+          backgroundColor: "#f9f9f9",
+          padding: "10px",
+          borderRadius: "4px",
+          textAlign: "left", // Ensures the JSON content is left-aligned
+        }}
+      >
+        {JSON.stringify(rawResponse, null, 2)}
+      </pre>
+      <button
+        onClick={handleClosePopup}
+        style={{
+          marginTop: "10px",
+          display: "block",
+          marginLeft: "auto",
+          marginRight: "auto",
+        }}
+      >
+        Close
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 };
