@@ -54,18 +54,18 @@ async function logSearchHistory(email, searchQuery, requestID, status, rawRespon
   const params = {
     TableName: "EnV_SearchHistory",
     Item: {
-      requestID, // Unique identifier for the request
-      email, // User who submitted the search
+      requestID, // Partition key: Unique ID for the search
+      email, // User email
       timestamp: new Date().toISOString(), // ISO formatted timestamp
-      searchQuery, // Search query input (form data)
-      status, // "success" or the error message
-      rawResponse: rawResponse || "N/A", // Raw API response (null if unsuccessful)
+      searchQuery, // Input query submitted by the user
+      status, // "Success" or an error message
+      rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A", // Full raw response excluding requestID from the API response
     },
   };
 
   try {
     await dynamoDBDocClient.send(new PutCommand(params));
-    console.log("Search history logged successfully.");
+    console.log("Search history logged successfully:", params.Item);
   } catch (error) {
     console.error("Error logging search history:", error);
     throw error;
@@ -178,9 +178,8 @@ app.post("/use-search", async (req, res) => {
   const { email, searchQuery } = req.body;
 
   try {
-    // Check user credits
+    // Step 1: Validate user credits
     const credits = await getUserCredits(email);
-
     if (credits <= 0) {
       const errorMessage = "No remaining credits. Please purchase a new pack.";
       await logSearchHistory(email, searchQuery, "N/A", errorMessage);
@@ -192,7 +191,7 @@ app.post("/use-search", async (req, res) => {
       });
     }
 
-    // Payload for the Lambda function
+    // Step 2: Construct payload for Enrich and Validate API
     const payload = {
       FirstName: searchQuery.firstName,
       LastName: searchQuery.lastName,
@@ -206,9 +205,9 @@ app.post("/use-search", async (req, res) => {
       },
     };
 
-    console.log("Payload sent to Lambda:", payload);
+    console.log("Payload sent to Enrich and Validate API:", payload);
 
-    // Call the Enrich and Validate API
+    // Step 3: Call the Enrich and Validate API
     const lambdaResponse = await axios.post(
       "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidate",
       payload,
@@ -218,27 +217,47 @@ app.post("/use-search", async (req, res) => {
     );
 
     const enrichData = lambdaResponse.data;
-    console.log("Lambda API Response:", enrichData);
+    console.log("API Response from Enrich and Validate:", enrichData);
 
+    // Step 4: Validate API response
     if (!enrichData || !enrichData.requestID) {
-      const errorMessage = "Failed to get data from Enrich and Validate API.";
+      const errorMessage = "Failed to get valid data from Enrich and Validate API.";
       await logSearchHistory(email, searchQuery, "N/A", errorMessage);
       return res.status(500).send({ error: { message: errorMessage } });
     }
 
-    // Deduct one credit
+    // Step 5: Deduct one credit
     await updateUserCredits(email, credits - 1);
 
-    // Log search history
-    await logSearchHistory(email, searchQuery, enrichData.requestID, "Success");
+    // Step 6: Log search history with corrected partition key
+    const dynamoDBRequestID = enrichData.requestID; // Use the API requestID as the partition key
 
+    await logSearchHistory(
+      email,
+      searchQuery,
+      dynamoDBRequestID, // Ensure the correct requestID from the API is used as the partition key
+      "Success",
+      {
+        ...enrichData,
+        requestID: undefined, // Exclude the requestID field from raw response to avoid duplication
+      }
+    );
+
+    // Step 7: Return success response
     res.status(200).send({
       message: "Search successful.",
       remainingCredits: credits - 1,
       data: enrichData,
     });
   } catch (error) {
+    // Step 8: Handle errors gracefully
     console.error("Error during search:", error.message);
+    await logSearchHistory(
+      email,
+      searchQuery,
+      "N/A",
+      error.message || "Internal Server Error"
+    );
     res.status(500).send({ error: { message: "Internal Server Error" } });
   }
 });
