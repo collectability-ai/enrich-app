@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.0.8"
-$description = "Fixed CLOSE button behavior on search result popup."
+$version = "v1.0.9"
+$description = "Added functionality to export Search History to CSV."
 
 # Add all changes
 git add .

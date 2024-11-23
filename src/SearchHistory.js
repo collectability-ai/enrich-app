@@ -28,28 +28,82 @@ const SearchHistory = ({ userEmail }) => {
     fetchSearchHistory();
   }, [userEmail]);
 
-const handleRowClick = (rawResponseData) => {
-  try {
-    const parsedResponse = JSON.parse(rawResponseData);
-    setRawResponse(parsedResponse);
-  } catch (err) {
-    console.error("Failed to parse raw response:", err);
-    setRawResponse(rawResponseData); // Fallback to original data if parsing fails
-  }
-};
+  const handleRowClick = (rawResponseData) => {
+    setRawResponse(rawResponseData);
+  };
 
-  const handleClosePopup = (event) => {
-  if (event && event.target && event.target.id === "popup-overlay") {
+  const handleClosePopup = () => {
     setRawResponse(null);
-  } else if (!event) {
-    // In cases where event is undefined (e.g., button click)
-    setRawResponse(null);
-  }
-};
+  };
+
+  const exportToCSV = () => {
+    if (searchHistory.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+
+    const csvContent = [
+      [
+        "Timestamp",
+        "First Name",
+        "Last Name",
+        "Email",
+        "Phone",
+        "Address",
+        "City",
+        "State",
+        "Zip",
+        "Status",
+        "Request ID",
+        "Raw Response",
+      ],
+      ...searchHistory.map((entry) => [
+        entry.timestamp,
+        entry.searchQuery?.firstName || "N/A",
+        entry.searchQuery?.lastName || "N/A",
+        entry.searchQuery?.email || "N/A",
+        entry.searchQuery?.phone || "N/A",
+        entry.searchQuery?.addressLine1 || "N/A",
+        entry.searchQuery?.city || "N/A",
+        entry.searchQuery?.state || "N/A",
+        entry.searchQuery?.zip || "N/A",
+        entry.status,
+        entry.requestID,
+        JSON.stringify(entry.rawResponse),
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "search_history.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div>
       <h2 style={{ textAlign: "center" }}>Search History</h2>
+      <div style={{ textAlign: "right", marginBottom: "10px" }}>
+        <button
+          onClick={exportToCSV}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#28a745",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Export to CSV
+        </button>
+      </div>
       {loading ? (
         <p>Loading search history...</p>
       ) : error ? (
@@ -57,107 +111,147 @@ const handleRowClick = (rawResponseData) => {
       ) : searchHistory.length === 0 ? (
         <p>No search history available.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "20px" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            marginBottom: "20px",
+          }}
+        >
           <thead>
-            <tr>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Timestamp</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>First Name</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Last Name</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Email</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Phone</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Address</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>City</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>State</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Zip</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Status</th>
-              <th style={{ border: "1px solid black", padding: "10px" }}>Request ID</th>
+            <tr style={{ borderBottom: "1px solid #ddd", textAlign: "left" }}>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Timestamp</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>First Name</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Last Name</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Email</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Phone</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Address</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>City</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>State</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Zip</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Status</th>
+              <th style={{ padding: "10px", border: "1px solid #ddd" }}>Request ID</th>
             </tr>
           </thead>
           <tbody>
             {searchHistory.map((entry) => (
               <tr
                 key={entry.requestID}
-                style={{ cursor: "pointer" }}
+                style={{
+                  borderBottom: "1px solid #ddd",
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
                 onClick={() => handleRowClick(entry.rawResponse)}
               >
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.timestamp}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.firstName || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.lastName || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.email || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.phone || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.addressLine1 || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.city || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.state || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.searchQuery?.zip || "N/A"}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.status}</td>
-                <td style={{ border: "1px solid black", padding: "10px" }}>{entry.requestID}</td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>{entry.timestamp}</td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.firstName || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.lastName || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.email || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.phone || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.addressLine1 || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.city || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.state || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>
+                  {entry.searchQuery?.zip || "N/A"}
+                </td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>{entry.status}</td>
+                <td style={{ padding: "10px", border: "1px solid #ddd" }}>{entry.requestID}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-
-  {rawResponse && (
-  <div
-    id="popup-overlay"
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "100%",
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 1000,
-    }}
-    onClick={handleClosePopup} // Overlay click
-  >
-    <div
-      style={{
-        background: "white",
-        padding: "20px",
-        borderRadius: "8px",
-        maxWidth: "80%",
-        maxHeight: "80%",
-        overflowY: "auto",
-        textAlign: "left",
-      }}
-      onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the popup
-    >
-      <h3 style={{ textAlign: "center" }}>Raw Response</h3>
-      <pre
-        style={{
-          whiteSpace: "pre-wrap",
-          wordWrap: "break-word",
-          backgroundColor: "#f9f9f9",
-          padding: "10px",
-          borderRadius: "4px",
-        }}
-      >
-        {JSON.stringify(rawResponse, null, 2)}
-      </pre>
-      <button
-        onClick={() => handleClosePopup()} // Button click calls handleClosePopup without event
-        style={{
-          marginTop: "10px",
-          display: "block",
-          marginLeft: "auto",
-          marginRight: "auto",
-          padding: "10px 20px",
-          backgroundColor: "#007BFF",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-        }}
-      >
-        Close
-      </button>
-    </div>
-  </div>
-)}
+      <div style={{ textAlign: "right", marginTop: "10px" }}>
+        <button
+          onClick={exportToCSV}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#28a745",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Export to CSV
+        </button>
+      </div>
+      {rawResponse && (
+        <div
+          id="popup-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+          onClick={handleClosePopup}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              maxWidth: "80%",
+              maxHeight: "80%",
+              overflowY: "auto",
+              textAlign: "left",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ textAlign: "center" }}>Raw Response</h3>
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                wordWrap: "break-word",
+                backgroundColor: "#f9f9f9",
+                padding: "10px",
+                borderRadius: "4px",
+              }}
+            >
+              {JSON.stringify(rawResponse, null, 2)}
+            </pre>
+            <button
+              onClick={handleClosePopup}
+              style={{
+                marginTop: "10px",
+                display: "block",
+                marginLeft: "auto",
+                marginRight: "auto",
+                padding: "10px 20px",
+                backgroundColor: "#007BFF",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
