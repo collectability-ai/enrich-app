@@ -38,11 +38,14 @@ const handleRowClick = (rawResponseData) => {
   }
 };
 
-  const handleClosePopup = (e) => {
-    if (e.target.id === "popup-overlay") {
-      setRawResponse(null);
-    }
-  };
+  const handleClosePopup = (event) => {
+  if (event && event.target && event.target.id === "popup-overlay") {
+    setRawResponse(null);
+  } else if (!event) {
+    // In cases where event is undefined (e.g., button click)
+    setRawResponse(null);
+  }
+};
 
   return (
     <div>
@@ -94,7 +97,7 @@ const handleRowClick = (rawResponseData) => {
         </table>
       )}
 
-     {rawResponse && (
+  {rawResponse && (
   <div
     id="popup-overlay"
     style={{
@@ -109,7 +112,7 @@ const handleRowClick = (rawResponseData) => {
       alignItems: "center",
       zIndex: 1000,
     }}
-    onClick={handleClosePopup}
+    onClick={handleClosePopup} // Overlay click
   >
     <div
       style={{
@@ -119,8 +122,9 @@ const handleRowClick = (rawResponseData) => {
         maxWidth: "80%",
         maxHeight: "80%",
         overflowY: "auto",
-        textAlign: "left", // Ensures left alignment
+        textAlign: "left",
       }}
+      onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the popup
     >
       <h3 style={{ textAlign: "center" }}>Raw Response</h3>
       <pre
@@ -130,18 +134,23 @@ const handleRowClick = (rawResponseData) => {
           backgroundColor: "#f9f9f9",
           padding: "10px",
           borderRadius: "4px",
-          textAlign: "left", // Ensures the JSON content is left-aligned
         }}
       >
         {JSON.stringify(rawResponse, null, 2)}
       </pre>
       <button
-        onClick={handleClosePopup}
+        onClick={() => handleClosePopup()} // Button click calls handleClosePopup without event
         style={{
           marginTop: "10px",
           display: "block",
           marginLeft: "auto",
           marginRight: "auto",
+          padding: "10px 20px",
+          backgroundColor: "#007BFF",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
         }}
       >
         Close
