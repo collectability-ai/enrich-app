@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.0.9"
-$description = "Added functionality to export Search History to CSV."
+$version = "v1.1.0"
+$description = "updated backend to call new v2 endpoint, break down product types, and implement new credit pricing plans."
 
 # Add all changes
 git add .
