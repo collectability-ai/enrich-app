@@ -11,98 +11,154 @@ const InputForm = ({ userEmail }) => {
     city: "",
     state: "",
     zip: "",
+    operation: "validate_and_enrich", // Default search type
   });
 
   const [responseData, setResponseData] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false); // Modal for confirmation
+  const [showResultModal, setShowResultModal] = useState(false); // Modal for success/error result
+  const [remainingCredits, setRemainingCredits] = useState(0);
+
+  const operationLabels = {
+    enrich: "Contact Enrich Search",
+    validate: "Contact Validation Search",
+    validate_and_enrich: "Contact Enrich and Validate Search",
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validateForm = () => {
+    const { firstName, lastName, address, city, state, zip, email, phone } = formData;
+
+    if (!firstName.trim() || !lastName.trim()) {
+      return "First Name and Last Name are required.";
+    }
+
+    const hasAddress = address.trim() || city.trim() || state.trim() || zip.trim();
+    const hasContactInfo = phone.trim() || email.trim() || hasAddress;
+
+    if (!hasContactInfo) {
+      return "At least one of Address, Phone, or Email must be provided.";
+    }
+
+    return ""; // No validation errors
+  };
+
+  const handleConfirm = async () => {
+    setShowModal(false); // Close confirmation modal
     setLoading(true);
     setError(null);
     setMessage("Processing your request...");
     setResponseData(null);
 
     try {
-      // Log payload being sent to the API
-      console.log("Payload sent to Enrich and Validate API:", {
-        FirstName: formData.firstName,
-        LastName: formData.lastName,
-        Email: formData.email,
-        Phone: formData.phone,
-        Address: {
+      // Prepare payload for the API
+      const payload = {
+        email: userEmail,
+        searchQuery: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
           addressLine1: formData.address,
           city: formData.city,
           state: formData.state,
           zip: formData.zip,
+          operation: formData.operation,
         },
-      });
-
-      // Step 1: Call the Enrich and Validate API
-      const enrichResponse = await axios.post(
-        "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidate",
-        {
-          FirstName: formData.firstName,
-          LastName: formData.lastName,
-          Email: formData.email,
-          Phone: formData.phone,
-          Address: {
-            addressLine1: formData.address,
-            city: formData.city,
-            state: formData.state,
-            zip: formData.zip,
-          },
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
-
-      const enrichData = enrichResponse.data;
-      console.log("API Response from Enrich and Validate:", enrichData);
-
-      // If no data is returned, stop further processing
-      if (!enrichData || Object.keys(enrichData).length === 0) {
-        setMessage("No data found. No credit deducted.");
-        return;
-      }
-
-      // Step 2: Deduct credit using /use-search
-      const useSearchPayload = {
-        email: userEmail,
-        searchQuery: formData,
-        apiResponse: enrichData,
       };
 
-      console.log("Payload sent to /use-search:", useSearchPayload);
+      console.log("Payload sent to /use-search:", payload);
 
-      const deductResponse = await axios.post("http://localhost:5000/use-search", useSearchPayload);
+      // Call /use-search API
+      const response = await axios.post("http://localhost:5000/use-search", payload);
 
-      console.log("Credit Deduction Response:", deductResponse.data);
+      console.log("API Response:", response.data);
 
-      // Step 3: Update UI with results and success message
-      setResponseData(enrichData);
-      setMessage(deductResponse.data.message || "Search recorded successfully.");
+      setResponseData(response.data.data || {});
+      setMessage(response.data.message || "Search completed successfully!");
+      setRemainingCredits(response.data.remainingCredits || 0); // Update remaining credits
+
+      setShowResultModal(true); // Show success modal
     } catch (err) {
       const errorMessage =
         err.response?.data?.error?.message || "An error occurred. Please try again.";
+      const remainingCredits = err.response?.data?.remainingCredits || 0; // Get remaining credits
       setError(errorMessage);
       setMessage(errorMessage);
+      setRemainingCredits(remainingCredits); // Update credits on error
       console.error("Error during search:", err);
+
+      setShowResultModal(true); // Show error modal
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    // Validate form input
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      setMessage(validationError);
+      return;
+    }
+
+    setShowModal(true); // Show confirmation modal
   };
 
   return (
     <div className="form-container" style={{ maxWidth: "400px", margin: "0 auto", padding: "20px" }}>
       <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Search Form</h2>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: "10px" }}>
+        {/* Search Type Field at the Top */}
+        <div>
+          <label>Search Type:</label>
+          <div>
+            <label>
+              <input
+                type="radio"
+                name="operation"
+                value="enrich"
+                checked={formData.operation === "enrich"}
+                onChange={handleChange}
+              />
+              Contact Enrich Search
+            </label>
+          </div>
+          <div>
+            <label>
+              <input
+                type="radio"
+                name="operation"
+                value="validate"
+                checked={formData.operation === "validate"}
+                onChange={handleChange}
+              />
+              Contact Validation Search
+            </label>
+          </div>
+          <div>
+            <label>
+              <input
+                type="radio"
+                name="operation"
+                value="validate_and_enrich"
+                checked={formData.operation === "validate_and_enrich"}
+                onChange={handleChange}
+              />
+              Contact Enrich and Validate Search
+            </label>
+          </div>
+        </div>
         <div>
           <label htmlFor="firstName">First Name*</label>
           <input
@@ -218,6 +274,120 @@ const InputForm = ({ userEmail }) => {
         </div>
       )}
       {error && <p style={{ color: "red" }}>Error: {error}</p>}
+
+      {/* Confirmation Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              textAlign: "center",
+            }}
+          >
+            <p>
+              You are about to use{" "}
+              <strong>{formData.operation === "validate_and_enrich" ? 3 : 2}</strong> credits to
+              perform <strong>{operationLabels[formData.operation]}</strong>. Confirm to continue.
+            </p>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  padding: "10px",
+                  backgroundColor: "#6c757d",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                style={{
+                  padding: "10px",
+                  backgroundColor: "#007BFF",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Modal */}
+      {showResultModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              textAlign: "center",
+            }}
+          >
+            {error ? (
+              <>
+                <p>
+                  <strong>Error:</strong> {message}
+                </p>
+                <p>You have not been charged any credits. Remaining credits: {remainingCredits}</p>
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>Success!</strong> You have {remainingCredits} credits remaining.
+                </p>
+                <button
+                  onClick={() => setShowResultModal(false)}
+                  style={{
+                    padding: "10px",
+                    backgroundColor: "#007BFF",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  View Results
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
