@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.1.0"
-$description = "updated backend to call new v2 endpoint, break down product types, and implement new credit pricing plans."
+$version = "v1.1.2"
+$description = "added x-api-key requirement to call api from app"
 
 # Add all changes
 git add .
