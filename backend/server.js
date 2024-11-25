@@ -15,6 +15,7 @@ const {
   ScanCommand, // Added for fetching search history
 } = require("@aws-sdk/lib-dynamodb");
 const axios = require("axios"); // For backend (Node.js)
+const API_KEY = process.env.ENRICH_VALIDATE_API_KEY;
 
 
 // Configure DynamoDB Client
@@ -245,70 +246,6 @@ app.post("/add-credits", async (req, res) => {
   }
 });
 
-// Route: Use Credit
-app.post("/use-credit", async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    // Validate request
-    if (!email) {
-      return res.status(400).send({ error: { message: "Email is required." } });
-    }
-
-    // Fetch current credits
-    const currentCredits = await getUserCredits(email);
-    if (currentCredits <= 0) {
-      return res.status(403).send({ error: { message: "No credits available to use." } });
-    }
-
-    // Deduct one credit
-    const newCredits = currentCredits - 1;
-    await updateUserCredits(email, newCredits);
-
-    // Respond with the updated credit count
-    res.status(200).send({
-      message: "Credit used successfully.",
-      remainingCredits: newCredits,
-    });
-
-    logger.info(`Deducted 1 credit from user: ${email}. Remaining credits: ${newCredits}`);
-  } catch (error) {
-    logger.error("Error in /use-credit:", error.message);
-    res.status(500).send({ error: { message: "Internal server error while using credit." } });
-  }
-});
-
-// Route: Reset Credits
-app.post("/reset-credits", async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    // Validate the request payload
-    if (!email) {
-      return res.status(400).send({ error: { message: "Email is required." } });
-    }
-
-    // Fetch current credits for debugging purposes
-    const currentCredits = await getUserCredits(email);
-    logger.info(`Resetting credits for user: ${email}. Current credits: ${currentCredits}`);
-
-    // Reset credits to 0
-    await updateUserCredits(email, 0);
-
-    // Respond with success message
-    res.status(200).send({
-      message: "Credits reset successfully.",
-      remainingCredits: 0,
-    });
-
-    logger.info(`Credits reset to 0 for user: ${email}`);
-  } catch (error) {
-    // Log and handle any errors
-    logger.error("Error in /reset-credits:", error.message);
-    res.status(500).send({ error: { message: "Internal server error while resetting credits." } });
-  }
-});
-
 // Route: Use a Search
 app.post("/use-search", async (req, res) => {
   const { email, searchQuery } = req.body;
@@ -379,20 +316,25 @@ app.post("/use-search", async (req, res) => {
           },
         },
       ],
-      emailAddresses: [searchQuery.email || ""], // Ensure an array with at least an empty string
-      phoneNumbers: [searchQuery.phone || ""],  // Ensure an array with at least an empty string
+      emailAddresses: [searchQuery.email || ""],
+      phoneNumbers: [searchQuery.phone || ""],
     };
 
     logger.info("Payload prepared for external API:", { payload, requestID });
 
-    // Step 5: Call external API
+    // Step 5: Call external API with x-api-key header
     let apiResponse;
     try {
       logger.info("Sending request to external API...");
       const response = await axios.post(
         "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidatev2",
         payload,
-        { headers: { "Content-Type": "application/json" } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY  // Add the API key header here
+          }
+        }
       );
       apiResponse = response.data;
       logger.info("Response received from external API:", { apiResponse, requestID });
