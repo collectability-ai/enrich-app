@@ -31,6 +31,7 @@ const Dashboard = ({ userEmail }) => {
   return (
     <div style={{ padding: "20px" }}>
       <h2 style={{ textAlign: "center" }}>Dashboard</h2>
+
       {loading ? (
         <p>Loading data...</p>
       ) : error ? (
@@ -42,6 +43,7 @@ const Dashboard = ({ userEmail }) => {
       )}
 
       <div style={{ marginTop: "30px" }}>
+        {/* Fetch and display user's search history */}
         <SearchHistory userEmail={userEmail} />
       </div>
     </div>

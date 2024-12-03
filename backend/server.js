@@ -5,18 +5,28 @@ const bodyParser = require("body-parser");
 const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
 const winston = require("winston");
 const cors = require("cors");
+
+// AWS SDK v3 imports
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
   GetCommand,
   UpdateCommand,
   PutCommand,
-  QueryCommand,
-  ScanCommand, // Added for fetching search history
+  ScanCommand, // For fetching search history
 } = require("@aws-sdk/lib-dynamodb");
-const axios = require("axios"); // For backend (Node.js)
-const API_KEY = process.env.ENRICH_VALIDATE_API_KEY;
+const { SignatureV4 } = require("@aws-sdk/signature-v4"); // Import SignatureV4
+const { fromEnv } = require("@aws-sdk/credential-providers"); // Use fromEnv for credentials
+const { Sha256 } = require("@aws-crypto/sha256-js"); // Import Sha256
+const { HttpRequest } = require("@aws-sdk/protocol-http");
 
+// Other dependencies
+const axios = require("axios");
+const jwt = require("jsonwebtoken");
+const jwksClient = require("jwks-rsa");
+
+// API and Configuration
+const API_KEY = process.env.ENRICH_VALIDATE_API_KEY;
 
 // Configure DynamoDB Client
 const dynamoDBClient = new DynamoDBClient({ region: "us-east-2" });
@@ -26,11 +36,59 @@ const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
 const USER_CREDITS_TABLE = "EnV_UserCredits";
 const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
 
+// AWS Region
+const region = "us-east-2";
+
+// Initialize SignatureV4 signer for API requests
+const signer = new SignatureV4({
+  service: "execute-api",
+  region: "us-east-2",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// Log to verify configuration
+console.log("AWS clients and SignatureV4 configured successfully.");
+
 // Define credit costs for each operation type
 const CREDIT_COSTS = {
   validate: 2,
   enrich: 2,
   validate_and_enrich: 3,
+};
+
+// Configure JWKS client for Cognito
+const client = jwksClient({
+  jwksUri: "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_EHz7xWNbm/.well-known/jwks.json",
+});
+
+// Middleware to validate tokens
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1]; // Extract Bearer token
+
+  if (!token) {
+    return res.status(401).json({ error: "Missing token" });
+  }
+
+  const getKey = (header, callback) => {
+    client.getSigningKey(header.kid, (err, key) => {
+      if (err) {
+        return callback(err);
+      }
+      const signingKey = key.getPublicKey();
+      callback(null, signingKey);
+    });
+  };
+
+  jwt.verify(token, getKey, { algorithms: ["RS256"] }, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    req.user = decoded; // Add decoded user info to request
+    next();
+  });
 };
 
 // Utility Functions
@@ -133,6 +191,11 @@ app.use(bodyParser.json());
 // Log server initialization
 logger.info("Server initialized.");
 
+// Route: Secure Endpoint (Example for Token Validation)
+app.post("/secure-endpoint", verifyToken, (req, res) => {
+  res.json({ message: "Secure access granted", user: req.user });
+});
+
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
   const { email, priceId, paymentMethodId } = req.body;
@@ -180,7 +243,10 @@ app.post("/purchase-pack", async (req, res) => {
       customer: customer.id,
       payment_method: paymentMethod,
       confirm: true,
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never", // Ensure redirect-based methods are not allowed
+      },
     });
 
     // Fetch current credits and update them with the purchased credits
@@ -201,6 +267,53 @@ app.post("/purchase-pack", async (req, res) => {
     logger.error(`Error purchasing credits for ${email}: ${err.message}`);
     res.status(400).send({ error: { message: err.message } });
   }
+});
+
+// Route: Get Payment Methods
+app.post("/get-payment-methods", verifyToken, async (req, res) => {
+    try {
+        // Extract user email from the token
+        const email = req.user?.email;
+
+        if (!email) {
+            return res.status(401).send({ error: "Unauthorized access" });
+        }
+
+        // Fetch or create the customer in Stripe
+        const customers = await stripe.customers.list({ email });
+        const customer = customers.data.find((c) => c.email === email);
+
+        if (!customer) {
+            return res.status(404).send({ error: "Customer not found" });
+        }
+
+        // Fetch payment methods
+        const paymentMethods = await stripe.paymentMethods.list({
+            customer: customer.id,
+            type: "card",
+        });
+
+        // Simplify the response
+        const simplifiedMethods = paymentMethods.data.map((method) => ({
+            id: method.id,
+            brand: method.card.brand,
+            last4: method.card.last4,
+            exp_month: method.card.exp_month,
+            exp_year: method.card.exp_year,
+        }));
+
+        // Handle case when no payment methods are found
+        if (simplifiedMethods.length === 0) {
+            return res
+                .status(200)
+                .send({ paymentMethods: [], message: "No payment methods found" });
+        }
+
+        res.status(200).send({ paymentMethods: simplifiedMethods });
+    } catch (error) {
+        console.error("Error fetching payment methods:", error.message);
+        res.status(500).send({ error: "Failed to fetch payment methods" });
+    }
 });
 
 // Route: Check or Fetch Credits
@@ -246,39 +359,31 @@ app.post("/add-credits", async (req, res) => {
   }
 });
 
-// Route: Use a Search
+// Use a Search Route
 app.post("/use-search", async (req, res) => {
   const { email, searchQuery } = req.body;
-
-  // Initialize the requestID immediately
   const requestID = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
     logger.info("POST /use-search hit with body:", { email, searchQuery, requestID });
 
-    // Step 1: Validate request payload presence
+    // Step 1: Validate request payload
     if (!email || !searchQuery) {
       const errorMessage = "Invalid request payload: Missing email or search query.";
       logger.error(errorMessage, { body: req.body, requestID });
       return res.status(400).send({ error: { message: errorMessage } });
     }
 
-    // Step 2: Get user credits
-    logger.info("Fetching credits for user:", email);
+    // Step 2: Fetch user credits
     const credits = await getUserCredits(email);
     if (credits <= 0) {
       const errorMessage = "No remaining credits. Please purchase a new pack.";
       logger.error(errorMessage, { email, requestID });
       await logSearchHistory(email, searchQuery, requestID, errorMessage);
-      return res.status(403).send({
-        error: {
-          message: errorMessage,
-          purchaseRequired: true,
-        },
-      });
+      return res.status(403).send({ error: { message: errorMessage, purchaseRequired: true } });
     }
 
-    // Step 3: Determine credit cost for the operation
+    // Step 3: Determine credit cost
     const operation = searchQuery.operation || "validate_and_enrich";
     const creditCost = CREDIT_COSTS[operation];
 
@@ -293,15 +398,11 @@ app.post("/use-search", async (req, res) => {
       logger.error(errorMessage, { email, requestID });
       await logSearchHistory(email, searchQuery, requestID, errorMessage);
       return res.status(403).send({
-        error: {
-          message: errorMessage,
-          requiredCredits: creditCost,
-          remainingCredits: credits,
-        },
+        error: { message: errorMessage, requiredCredits: creditCost, remainingCredits: credits },
       });
     }
 
-    // Step 4: Prepare payload for external API
+    // Step 4: Prepare payload for API request
     const payload = {
       operation,
       nameAddresses: [
@@ -322,20 +423,48 @@ app.post("/use-search", async (req, res) => {
 
     logger.info("Payload prepared for external API:", { payload, requestID });
 
-    // Step 5: Call external API with x-api-key header
+    // Step 5: Prepare and sign the API request
+    const request = new HttpRequest({
+      hostname: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
+      path: "/SandBox/enrichandvalidatev2",
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "application/json",
+        Host: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
+        "x-api-key": process.env.API_KEY, // Include the API key
+      },
+    });
+
+    // Initialize the SignatureV4 signer with the SHA-256 hash constructor
+    const signer = new SignatureV4({
+      service: "execute-api",
+      region: "us-east-2",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+      sha256: Sha256, // Explicit SHA-256 hash implementation
+    });
+
+    const signedRequest = await signer.sign(request);
+
+    // Log signed request headers for debugging
+    logger.info("Signed request headers:", {
+      headers: signedRequest.headers,
+    });
+
+    // Step 6: Make the signed API call
     let apiResponse;
     try {
-      logger.info("Sending request to external API...");
-      const response = await axios.post(
-        "https://8zb4x5d8q4.execute-api.us-east-2.amazonaws.com/SandBox/enrichandvalidatev2",
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": API_KEY  // Add the API key header here
-          }
-        }
-      );
+      logger.info("Sending signed request to external API...");
+      const response = await axios({
+        method: signedRequest.method,
+        url: `https://${signedRequest.hostname}${signedRequest.path}`,
+        headers: signedRequest.headers,
+        data: signedRequest.body,
+      });
+
       apiResponse = response.data;
       logger.info("Response received from external API:", { apiResponse, requestID });
     } catch (apiError) {
@@ -349,10 +478,10 @@ app.post("/use-search", async (req, res) => {
       return res.status(500).send({ error: { message: errorMessage } });
     }
 
-    // Step 6: Deduct credits and log search history
-    logger.info("Deducting credits for user:", { email, requestID });
+    // Step 7: Deduct user credits
     await updateUserCredits(email, credits - creditCost);
 
+    // Step 8: Log search history
     try {
       await logSearchHistory(
         email,
@@ -374,8 +503,7 @@ app.post("/use-search", async (req, res) => {
       });
     }
 
-    // Step 7: Send response to client
-    logger.info("Search completed successfully for user:", { email, requestID });
+    // Step 9: Send success response to client
     res.status(200).send({
       message: "Search successful.",
       remainingCredits: credits - creditCost,

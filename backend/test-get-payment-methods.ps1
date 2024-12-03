@@ -1,0 +1,18 @@
+# Define the API endpoint
+$endpoint = "http://localhost:5000/get-payment-methods"
+
+# Replace this with a valid JWT token
+$token = "eyJraWQiOiJLSGhmRjc0dVwvNXdOQ1BqZGUxZXlpOGFuaW9IcFh0dkVMamM1dFJ2ZnFcL1E9IiwiYWxnIjoiUlMyNTYifQ.eyJhdF9oYXNoIjoibXhSWFZicGpqLVZRTVlnNkY2elVLQSIsInN1YiI6ImUxZWJmNTcwLTgwNTEtNzBjMy0wYWNiLWY2ZGQ0ODQyNjdiOCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAudXMtZWFzdC0yLmFtYXpvbmF3cy5jb21cL3VzLWVhc3QtMl9FSHo3eFdOYm0iLCJjb2duaXRvOnVzZXJuYW1lIjoiZTFlYmY1NzAtODA1MS03MGMzLTBhY2ItZjZkZDQ4NDI2N2I4Iiwib3JpZ2luX2p0aSI6IjM0MTc0OTQ3LTU2MmEtNDI5NS1hYWEyLWZhZWJmMTkwYWEyNyIsImF1ZCI6IjY0aXFkdWg4MmU2dHZkNW9ybGtuN3JrdGM4IiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE3MzMyNTc0NTYsImV4cCI6MTczMzI2MTA1NiwiaWF0IjoxNzMzMjU3NDU2LCJqdGkiOiJkMDM2NzM0My1kZDczLTQ2YzgtYTU3Yy04YjI3ZTAwYTUyMDAiLCJlbWFpbCI6InMxdHJhbnNpdGlvbmNvbnRhY3RAZ21haWwuY29tIn0.Oc1Z_ec3hBJvka6pzXXwehA-c5ow7xj5kcMkJn1uCyxc9ICDg-pgaCpaWLT_QvqaCzA6leLcwmJYCK16OZ-NPqv3zsAXKkV5_zcMWn2rQRnWmvZhCtS9fpjMlFx-wCNwP34aUjDXjBdVYcLX6okBKlC2-idcqMOsgMVTNEpOJm4Z6gRPP5r5JRvi8ppV4dvVk5sm0PLmmPl5foGH2sYJmIN6fS36vVzgAMi56UHaB7KhZUcQXLKpih8SzrFbHZeDo7QXNn4rFHz_JHsaQwmsEhq0dbXvx8aL17EG_-56TOOxpfYdZu6K6FcBI1pixGZJr_i71Am4A6xgjAmEBrbsGw"
+
+# Set headers
+$headers = @{
+    "Authorization" = "Bearer $token"
+    "Content-Type" = "application/json"
+}
+
+# Make the POST request
+$response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers
+
+# Display the response
+Write-Host "Response:" -ForegroundColor Green
+$response | ConvertTo-Json -Depth 10
