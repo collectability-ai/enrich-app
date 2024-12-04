@@ -71,7 +71,7 @@ const App = () => {
           style={{
             padding: "10px",
             textDecoration: "none",
-            backgroundColor: "#007bff",
+            backgroundColor: "#67cad8",
             color: "white",
             textAlign: "center",
             borderRadius: "4px",
@@ -85,7 +85,7 @@ const App = () => {
           style={{
             padding: "10px",
             textDecoration: "none",
-            backgroundColor: "#28a745",
+            backgroundColor: "#67cad8",
             color: "white",
             textAlign: "center",
             borderRadius: "4px",
@@ -99,7 +99,7 @@ const App = () => {
           style={{
             padding: "10px",
             textDecoration: "none",
-            backgroundColor: "#ffc107",
+            backgroundColor: "#67cad8",
             color: "white",
             textAlign: "center",
             borderRadius: "4px",
@@ -113,7 +113,7 @@ const App = () => {
           onClick={handleSignOut}
           style={{
             padding: "10px",
-            backgroundColor: "#dc3545",
+            backgroundColor: "#67cad8",
             color: "white",
             border: "none",
             borderRadius: "4px",

@@ -11,6 +11,10 @@ const Dashboard = ({ userEmail, token }) => {
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [showPopup, setShowPopup] = useState(false); // For the confirmation popup
   const [processing, setProcessing] = useState(false); // For purchase in progress
+  const [purchaseHistory, setPurchaseHistory] = useState([]); // To store purchase data
+  const [loadingHistory, setLoadingHistory] = useState(false); // For loading indicator
+  const [historyError, setHistoryError] = useState(null); // To store error messages
+  const [isExpanded, setIsExpanded] = useState(false); // To manage collapsible state
 
   // Fetch Remaining Credits
   useEffect(() => {
@@ -64,6 +68,47 @@ const Dashboard = ({ userEmail, token }) => {
 
     fetchPaymentMethods();
   }, [token, userEmail]);
+
+ // Fetch Purchase History
+useEffect(() => {
+  const fetchPurchaseHistory = async () => {
+    setLoadingHistory(true);
+    setHistoryError(null);
+
+    try {
+      const response = await fetch("http://localhost:5000/get-purchase-history", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Use the user's token
+        },
+        body: JSON.stringify({ email: userEmail }), // Include the user's email
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch purchase history.");
+      }
+
+      const data = await response.json();
+      console.log("Fetched Purchase History Data:", data.history); // Debug log
+
+      // Map response fields to the required format
+      const formattedHistory = (data.history || []).map((purchase) => ({
+        date: purchase.date || "N/A",
+        amount: purchase.amount ? `$${purchase.amount.toFixed(2)}` : "N/A",
+      }));
+
+      setPurchaseHistory(formattedHistory);
+    } catch (error) {
+      setHistoryError("Unable to load purchase history.");
+      console.error("Error fetching purchase history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  fetchPurchaseHistory();
+}, [token, userEmail]);
 
  // Handle Quick Buy
 const handleQuickBuy = async () => {
@@ -250,10 +295,92 @@ const handleQuickBuy = async () => {
         </div>
       )}
 
-      {/* Search History */}
-      <div style={{ marginTop: "30px" }}>
-        <SearchHistory userEmail={userEmail} />
-      </div>
+  {/* Purchase History Section */}
+<div
+  style={{
+    marginTop: "30px",
+    padding: "20px",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  }}
+>
+  <h3 style={{ textAlign: "center", marginBottom: "10px" }}>Purchase History</h3>
+
+  {loadingHistory ? (
+    <p>Loading purchase history...</p>
+  ) : historyError ? (
+    <p style={{ color: "red" }}>{historyError}</p>
+  ) : purchaseHistory.length === 0 ? (
+    <p>No purchase history available.</p>
+  ) : (
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        marginBottom: "10px",
+      }}
+    >
+      <thead>
+        <tr style={{ backgroundColor: "#f2f2f2" }}>
+          <th style={{ textAlign: "left", padding: "10px", borderBottom: "1px solid #ddd" }}>
+            Date
+          </th>
+          <th style={{ textAlign: "left", padding: "10px", borderBottom: "1px solid #ddd" }}>
+            Amount
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {(isExpanded ? purchaseHistory : purchaseHistory.slice(0, 3)).map(
+          (purchase, index) => (
+            <tr key={index}>
+              <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
+                {purchase.date}
+              </td>
+              <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
+                {purchase.amount}
+              </td>
+            </tr>
+          )
+        )}
+      </tbody>
+    </table>
+  )}
+
+  {purchaseHistory.length > 3 && (
+    <div style={{ textAlign: "right" }}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{
+          padding: "8px 16px",
+          backgroundColor: isExpanded ? "#dc3545" : "#007bff",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "14px",
+        }}
+      >
+        {isExpanded ? "Collapse" : "Expand All"}
+      </button>
+    </div>
+  )}
+</div>
+
+
+     {/* Search History Section */}
+<div
+  style={{
+    marginTop: "30px",
+    padding: "20px",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+  }}
+>
+  <SearchHistory userEmail={userEmail} />
+</div>
     </div>
   );
 };

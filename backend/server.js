@@ -586,6 +586,41 @@ app.post("/get-search-history", async (req, res) => {
   }
 });
 
+// Route: Get Purchase History
+app.post("/get-purchase-history", async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        // Find the Stripe customer by email
+        const customers = await stripe.customers.list({ email });
+        const customer = customers.data.find((c) => c.email === email);
+
+        if (!customer) {
+            return res.status(404).send({ error: "Customer not found" });
+        }
+
+        // Fetch payment intents (purchase history)
+        const paymentIntents = await stripe.paymentIntents.list({
+            customer: customer.id,
+            limit: 10, // Fetch up to 10 most recent purchases
+        });
+
+        // Simplify the response
+        const history = paymentIntents.data.map((payment) => ({
+            amount: payment.amount / 100, // Convert to dollars
+            currency: payment.currency.toUpperCase(),
+            status: payment.status,
+            date: new Date(payment.created * 1000).toLocaleString(), // Convert to readable date
+            description: payment.description || "Credit Purchase",
+        }));
+
+        res.status(200).send({ history });
+    } catch (error) {
+        console.error("Error fetching purchase history:", error.message);
+        res.status(500).send({ error: "Failed to fetch purchase history" });
+    }
+});
+
 // Start server
 app.listen(port, () => {
   logger.info(`Server running on port ${port}`);
