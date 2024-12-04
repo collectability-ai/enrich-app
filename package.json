@@ -16,6 +16,7 @@
     "dotenv": "^16.4.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",
+    "node-fetch": "^2.7.0",
     "oidc-client-ts": "^3.1.0",
     "process": "^0.11.10",
     "react": "^18.3.1",

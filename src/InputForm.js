@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const InputForm = ({ userEmail }) => {
+const InputForm = ({ userEmail, userCredits }) => {
   const [searchQuery, setSearchQuery] = useState({
     firstName: "",
     lastName: "",
@@ -15,15 +15,28 @@ const InputForm = ({ userEmail }) => {
     operation: "validate_and_enrich",
   });
   const [error, setError] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
   const navigate = useNavigate();
+
+  // Map operation names to friendly names and credits
+  const operationDetails = {
+    validate: { name: "Validate", credits: 2 },
+    enrich: { name: "Enrich", credits: 2 },
+    validate_and_enrich: { name: "Validate and Enrich", credits: 3 },
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setSearchQuery({ ...searchQuery, [name]: value });
   };
 
-  const handleSearchSubmit = async (e) => {
+  const handleSubmitClick = (e) => {
     e.preventDefault();
+    setShowDialog(true);
+  };
+
+  const handleConfirm = async () => {
+    setShowDialog(false);
     setError(null);
 
     try {
@@ -32,12 +45,17 @@ const InputForm = ({ userEmail }) => {
         searchQuery,
       });
 
-      // Navigate to ResultsPage with response data
       navigate("/results", { state: { data: response.data.data } });
     } catch (err) {
       setError(err.response?.data?.error?.message || "Search failed");
     }
   };
+
+  const handleCancel = () => {
+    setShowDialog(false);
+  };
+
+  const selectedOperation = operationDetails[searchQuery.operation];
 
   return (
     <div
@@ -52,9 +70,9 @@ const InputForm = ({ userEmail }) => {
       }}
     >
       <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Search</h2>
-      <form onSubmit={handleSearchSubmit}>
-        {/* Input fields */}
+      <form onSubmit={handleSubmitClick}>
         <div style={{ marginBottom: "10px" }}>
+          {/* Input fields */}
           <input
             type="text"
             name="firstName"
@@ -131,7 +149,6 @@ const InputForm = ({ userEmail }) => {
           </select>
         </div>
 
-        {/* Submit button */}
         <button
           type="submit"
           style={{
@@ -148,7 +165,70 @@ const InputForm = ({ userEmail }) => {
         </button>
       </form>
 
-      {/* Error message */}
+      {/* Confirmation dialog */}
+      {showDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+              textAlign: "center",
+              width: "90%",
+              maxWidth: "400px",
+            }}
+          >
+            <p>
+              You are about to use <strong>{selectedOperation.credits}</strong>{" "}
+              credit(s) to perform a{" "}
+              <strong>{selectedOperation.name}</strong> search.
+            </p>
+            <div style={{ marginTop: "20px" }}>
+              <button
+                onClick={handleConfirm}
+                style={{
+                  marginRight: "10px",
+                  padding: "10px",
+                  backgroundColor: "#007BFF",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={handleCancel}
+                style={{
+                  padding: "10px",
+                  backgroundColor: "#FF0000",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <p style={{ color: "red", marginTop: "10px", textAlign: "center" }}>
           {error}

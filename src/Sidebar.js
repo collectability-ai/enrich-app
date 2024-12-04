@@ -1,37 +1,44 @@
 import React from "react";
-import { Link } from "react-router-dom";
 
-const Sidebar = ({ onSignOut }) => {
+const Sidebar = ({ userEmail }) => {
   return (
-    <nav
+    <div
       style={{
+        width: "250px",
+        backgroundColor: "#f8f9fa",
+        height: "100vh",
+        boxShadow: "2px 0px 5px rgba(0,0,0,0.1)",
+        padding: "20px",
+        fontFamily: "Arial, sans-serif",
         display: "flex",
         flexDirection: "column",
-        gap: "10px",
-        padding: "20px",
-        backgroundColor: "#f8f9fa",
-        minHeight: "100vh",
-        boxShadow: "2px 0 5px rgba(0, 0, 0, 0.1)",
+        alignItems: "center",
       }}
     >
-      <Link to="/dashboard">Dashboard</Link>
-      <Link to="/search">Search</Link>
-      <Link to="/purchase-credits">Purchase Credits</Link>
-      <button
-        onClick={onSignOut}
+      {/* Logo */}
+      <div style={{ marginBottom: "20px" }}>
+        <img
+          src="/logo.png"
+          alt="Logo"
+          style={{
+            width: "150px",
+            height: "auto",
+          }}
+        />
+      </div>
+
+      {/* Logged-in user email */}
+      <div
         style={{
-          marginTop: "auto",
-          padding: "10px 15px",
-          backgroundColor: "#d9534f",
-          color: "#fff",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
+          textAlign: "center",
+          fontSize: "14px",
+          color: "#333",
+          marginTop: "10px",
         }}
       >
-        Sign Out
-      </button>
-    </nav>
+        <p>{userEmail}</p>
+      </div>
+    </div>
   );
 };
 

@@ -1,4 +1,5 @@
 import React from "react";
+import './index.css';
 import ReactDOM from "react-dom/client";
 import { AuthProvider } from "react-oidc-context";
 import App from "./App";

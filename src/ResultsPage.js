@@ -60,7 +60,7 @@ const ResultsPage = () => {
       <header style={{ textAlign: "center", marginBottom: "20px" }}>
         {/* Display Logo */}
         <img
-          src="/logo-small.png"
+          src="/logo.png"
           alt="Logo"
           style={{
             height: "50px",

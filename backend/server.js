@@ -237,20 +237,26 @@ app.post("/purchase-pack", async (req, res) => {
     }
 
     // Create the payment intent in Stripe
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: selectedTier.amount,
-      currency: "usd",
-      customer: customer.id,
-      payment_method: paymentMethod,
-      confirm: true,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never", // Ensure redirect-based methods are not allowed
-      },
-    });
+const paymentIntent = await stripe.paymentIntents.create({
+  amount: selectedTier.amount,
+  currency: "usd",
+  customer: customer.id,
+  payment_method: paymentMethod,
+  confirm: true,
+  automatic_payment_methods: {
+    enabled: true,
+    allow_redirects: "never", // Explicitly disallow redirect-based payment methods
+  },
+});
 
     // Fetch current credits and update them with the purchased credits
     const currentCredits = await getUserCredits(email);
+
+    if (currentCredits === null) {
+      logger.error(`No existing credits found for user: ${email}`);
+      throw new Error("User not found in credits database.");
+    }
+
     const updatedCredits = currentCredits + selectedTier.credits;
     await updateUserCredits(email, updatedCredits);
 
@@ -264,8 +270,34 @@ app.post("/purchase-pack", async (req, res) => {
     });
   } catch (err) {
     // Handle errors gracefully
-    logger.error(`Error purchasing credits for ${email}: ${err.message}`);
+    logger.error(`Error purchasing credits for ${email}: ${err.message}`, {
+      stack: err.stack,
+    });
     res.status(400).send({ error: { message: err.message } });
+  }
+});
+
+
+// Route: Create Stripe Checkout Session
+app.post("/create-checkout-session", async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"], // Accepts card payments
+      line_items: [
+        {
+          price: "price_1QOv9IAUGHTClvwyzELdaAiQ", // 50-credit pack price ID
+          quantity: 1,
+        },
+      ],
+      mode: "payment", // One-time payment
+      success_url: "http://localhost:3000/dashboard?status=success", // Adjust for production
+      cancel_url: "http://localhost:3000/dashboard?status=cancel", // Adjust for production
+    });
+
+    res.json({ url: session.url }); // Respond with Stripe Checkout Session URL
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    res.status(500).send({ error: "Failed to create checkout session" });
   }
 });
 

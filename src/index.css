@@ -1,13 +1,23 @@
-body {
+/* Reset and box-sizing */
+* {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
+  box-sizing: border-box;
 }
 
+/* Global font styles */
+body {
+  font-family: 'Arial', 'Helvetica Neue', sans-serif; /* Ensures sans-serif fonts */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8f9fa; /* Light background for a cleaner look */
+  color: #333; /* Default text color */
+}
+
+/* Styling for code elements */
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: 'Courier New', Consolas, 'Monaco', monospace;
+  background-color: #f4f4f4; /* Light gray background for code blocks */
+  padding: 4px;
+  border-radius: 4px;
 }
