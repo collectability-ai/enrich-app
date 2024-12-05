@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const SearchHistory = ({ userEmail }) => {
+const SearchHistory = ({ userEmail, token }) => {
   const [searchHistory, setSearchHistory] = useState([]);
   const [filteredHistory, setFilteredHistory] = useState([]);
   const [error, setError] = useState(null);
@@ -11,32 +11,60 @@ const SearchHistory = ({ userEmail }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  useEffect(() => {
-    const fetchSearchHistory = async () => {
-      setLoading(true);
-      setError(null);
+ useEffect(() => {
+  let isMounted = true; // For cleanup
 
-      try {
-        const response = await axios.post("http://localhost:5000/get-search-history", {
-          email: userEmail,
-        });
+  const fetchSearchHistory = async () => {
+    setLoading(true);
+    setError(null);
+    setSearchHistory([]); // Clear immediately when effect runs
+    setFilteredHistory([]); // Clear immediately when effect runs
 
-        // Sort history by most recent timestamp first
+    if (!userEmail) {
+      console.log("Waiting for user email...");
+      return;
+    }
+
+    try {
+      console.log("Fetching search history for:", userEmail);
+      const response = await axios.post(
+        "http://localhost:5000/get-search-history",
+        { email: userEmail },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (isMounted) { // Only set state if component is still mounted
         const sortedHistory = response.data.history.sort(
           (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
         );
         setSearchHistory(sortedHistory);
         setFilteredHistory(sortedHistory);
-      } catch (err) {
+      }
+    } catch (err) {
+      if (isMounted) {
         console.error("Error fetching search history:", err.message);
         setError(err.response?.data?.error?.message || "Failed to fetch search history.");
-      } finally {
+      }
+    } finally {
+      if (isMounted) {
         setLoading(false);
       }
-    };
+    }
+  };
 
-    fetchSearchHistory();
-  }, [userEmail]);
+  fetchSearchHistory();
+
+  // Cleanup function
+  return () => {
+    isMounted = false;
+    setSearchHistory([]);
+    setFilteredHistory([]);
+  };
+}, [userEmail, token]);
 
   const handleSearch = () => {
     const query = searchQuery.toLowerCase().trim();

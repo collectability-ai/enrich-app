@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import SearchHistory from "./SearchHistory";
+import { jwtDecode } from "jwt-decode";
 
-const Dashboard = ({ userEmail, token }) => {
+
+const Dashboard = ({ token }) => {
+  const [userEmail, setUserEmail] = useState(null); // Add this state
+  console.log("Dashboard - userEmail:", userEmail); // Debug userEmail
+  console.log("Dashboard - token:", token); // Debug token
   const [remainingCredits, setRemainingCredits] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [creditsError, setCreditsError] = useState(null);
@@ -16,98 +21,175 @@ const Dashboard = ({ userEmail, token }) => {
   const [historyError, setHistoryError] = useState(null); // To store error messages
   const [isExpanded, setIsExpanded] = useState(false); // To manage collapsible state
 
+useEffect(() => {
+  if (token) {
+    try {
+      const decodedToken = jwtDecode(token);
+      const email = decodedToken.email || decodedToken["cognito:username"];
+      setUserEmail(email);
+      console.log("Dashboard - setting userEmail:", email); // Debug log
+    } catch (err) {
+      console.error("Error decoding token:", err);
+    }
+  }
+}, [userEmail, token]); // Include both dependencies
+
   // Fetch Remaining Credits
   useEffect(() => {
-    const fetchCredits = async () => {
-      setLoadingCredits(true);
-      setCreditsError(null);
+  let isMounted = true;
 
-      try {
-        const response = await axios.post("http://localhost:5000/check-credits", {
-          email: userEmail,
-        });
-        setRemainingCredits(response.data.credits);
-      } catch (err) {
-        setCreditsError("Failed to fetch remaining credits.");
-      } finally {
-        setLoadingCredits(false);
-      }
-    };
+  const fetchCredits = async () => {
+    setLoadingCredits(true);
+    setCreditsError(null);
+    setRemainingCredits(null); // Clear credits immediately when effect runs
 
-    fetchCredits();
-  }, [userEmail]);
+    if (!userEmail) {
+      console.log("No user email available for credits fetch");
+      return;
+    }
 
-  // Fetch Payment Methods
-  useEffect(() => {
-    const fetchPaymentMethods = async () => {
-      setLoadingPayments(true);
-      setPaymentsError(null);
-
-      try {
-        const response = await fetch("http://localhost:5000/get-payment-methods", {
-          method: "POST",
+    try {
+      console.log("Fetching credits for user:", userEmail);
+      const response = await axios.post(
+        "http://localhost:5000/check-credits",
+        { email: userEmail },
+        {
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ email: userEmail }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch payment methods.");
         }
+      );
+      
+      if (isMounted) {
+        setRemainingCredits(response.data.credits);
+      }
+    } catch (err) {
+      if (isMounted) {
+        console.error("Error fetching remaining credits:", err);
+        setCreditsError("Failed to fetch remaining credits.");
+      }
+    } finally {
+      if (isMounted) {
+        setLoadingCredits(false);
+      }
+    }
+  };
 
-        const data = await response.json();
-        setPaymentMethods(data.paymentMethods || []);
-      } catch (err) {
+  fetchCredits();
+
+  // Cleanup function
+  return () => {
+    isMounted = false;
+    setRemainingCredits(null);
+    setCreditsError(null);
+  };
+}, [userEmail, token]);
+
+  // Fetch Payment Methods
+useEffect(() => {
+  let isMounted = true;
+
+  const fetchPaymentMethods = async () => {
+    setLoadingPayments(true);
+    setPaymentsError(null);
+    setPaymentMethods([]); // Clear immediately when effect runs
+
+    if (!userEmail) {
+      console.log("No user email available yet");
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/get-payment-methods",
+        { email: userEmail },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (isMounted) {
+        setPaymentMethods(response.data.paymentMethods || []);
+      }
+    } catch (err) {
+      if (isMounted) {
+        console.error("Error fetching payment methods:", err);
         setPaymentsError("Unable to load payment methods.");
-      } finally {
+      }
+    } finally {
+      if (isMounted) {
         setLoadingPayments(false);
       }
-    };
+    }
+  };
 
-    fetchPaymentMethods();
-  }, [token, userEmail]);
+  fetchPaymentMethods();
+
+  // Cleanup function
+  return () => {
+    isMounted = false;
+    setPaymentMethods([]);
+    setPaymentsError(null);
+  };
+}, [token, userEmail]);
+
 
  // Fetch Purchase History
 useEffect(() => {
+  let isMounted = true;
+
   const fetchPurchaseHistory = async () => {
     setLoadingHistory(true);
     setHistoryError(null);
+    setPurchaseHistory([]); // Clear immediately when effect runs
+
+    if (!userEmail) {
+      console.log("No user email available yet");
+      return;
+    }
 
     try {
-      const response = await fetch("http://localhost:5000/get-purchase-history", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // Use the user's token
-        },
-        body: JSON.stringify({ email: userEmail }), // Include the user's email
-      });
+      const response = await axios.post(
+        "http://localhost:5000/get-purchase-history",
+        { email: userEmail },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch purchase history.");
+      if (isMounted) {
+        const data = response.data;
+        const formattedHistory = (data.history || []).map((purchase) => ({
+          date: purchase.date || "N/A",
+          amount: purchase.amount ? `$${purchase.amount.toFixed(2)}` : "N/A",
+        }));
+
+        setPurchaseHistory(formattedHistory);
       }
-
-      const data = await response.json();
-      console.log("Fetched Purchase History Data:", data.history); // Debug log
-
-      // Map response fields to the required format
-      const formattedHistory = (data.history || []).map((purchase) => ({
-        date: purchase.date || "N/A",
-        amount: purchase.amount ? `$${purchase.amount.toFixed(2)}` : "N/A",
-      }));
-
-      setPurchaseHistory(formattedHistory);
-    } catch (error) {
-      setHistoryError("Unable to load purchase history.");
-      console.error("Error fetching purchase history:", error);
+    } catch (err) {
+      if (isMounted) {
+        console.error("Error fetching purchase history:", err);
+        setHistoryError("Unable to load purchase history.");
+      }
     } finally {
-      setLoadingHistory(false);
+      if (isMounted) {
+        setLoadingHistory(false);
+      }
     }
   };
 
   fetchPurchaseHistory();
+
+  // Cleanup function
+  return () => {
+    isMounted = false;
+    setPurchaseHistory([]);
+    setHistoryError(null);
+  };
 }, [token, userEmail]);
 
  // Handle Quick Buy
@@ -379,7 +461,7 @@ const handleQuickBuy = async () => {
     boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
   }}
 >
-  <SearchHistory userEmail={userEmail} />
+  {userEmail && <SearchHistory userEmail={userEmail} token={token} />}
 </div>
     </div>
   );

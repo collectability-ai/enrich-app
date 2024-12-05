@@ -2,6 +2,7 @@ import React from "react";
 import './index.css';
 import ReactDOM from "react-dom/client";
 import { AuthProvider } from "react-oidc-context";
+import { BrowserRouter } from "react-router-dom"; // Import BrowserRouter
 import App from "./App";
 
 const cognitoAuthConfig = {
@@ -16,8 +17,10 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 
 root.render(
   <React.StrictMode>
-    <AuthProvider {...cognitoAuthConfig}>
-      <App />
-    </AuthProvider>
+    <BrowserRouter> {/* Wrap the app with BrowserRouter */}
+      <AuthProvider {...cognitoAuthConfig}>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

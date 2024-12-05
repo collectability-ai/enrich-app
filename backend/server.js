@@ -1,24 +1,29 @@
-require("dotenv").config(); // Load environment variables at the very top
+// Load environment variables at the very top
+require("dotenv").config();
 
+// Core dependencies
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
 const winston = require("winston");
 const cors = require("cors");
 
-// AWS SDK v3 imports
+// AWS SDK imports
+const { CognitoIdentityProviderClient } = require("@aws-sdk/client-cognito-identity-provider");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
   GetCommand,
   UpdateCommand,
   PutCommand,
-  ScanCommand, // For fetching search history
+  ScanCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { SignatureV4 } = require("@aws-sdk/signature-v4"); // Import SignatureV4
-const { fromEnv } = require("@aws-sdk/credential-providers"); // Use fromEnv for credentials
-const { Sha256 } = require("@aws-crypto/sha256-js"); // Import Sha256
+const { SignatureV4 } = require("@aws-sdk/signature-v4");
+const { fromEnv } = require("@aws-sdk/credential-providers");
+const { Sha256 } = require("@aws-crypto/sha256-js");
 const { HttpRequest } = require("@aws-sdk/protocol-http");
+const { SignUpCommand, InitiateAuthCommand } = require("@aws-sdk/client-cognito-identity-provider");
 
 // Other dependencies
 const axios = require("axios");
@@ -49,8 +54,23 @@ const signer = new SignatureV4({
   },
 });
 
-// Log to verify configuration
-console.log("AWS clients and SignatureV4 configured successfully.");
+// Configure JWKS client for Cognito
+const client = jwksClient({
+  jwksUri: "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_EHz7xWNbm/.well-known/jwks.json",
+});
+
+// Initialize Winston logger
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "backend.log" }),
+  ],
+});
 
 // Define credit costs for each operation type
 const CREDIT_COSTS = {
@@ -59,14 +79,31 @@ const CREDIT_COSTS = {
   validate_and_enrich: 3,
 };
 
-// Configure JWKS client for Cognito
-const client = jwksClient({
-  jwksUri: "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_EHz7xWNbm/.well-known/jwks.json",
-});
+// Initialize Express app
+const app = express();
+const port = 5000;
+
+// Add CORS Middleware
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
+
+// Use cookie-parser middleware
+app.use(cookieParser());
+
+// Add JSON parsing middleware
+app.use(bodyParser.json());
+
+// Log server initialization
+logger.info("Server initialized.");
 
 // Middleware to validate tokens
 const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1]; // Extract Bearer token
+  const token = req.headers.authorization?.split(" ")[1];
 
   if (!token) {
     return res.status(401).json({ error: "Missing token" });
@@ -86,111 +123,111 @@ const verifyToken = (req, res, next) => {
     if (err) {
       return res.status(401).json({ error: "Invalid token" });
     }
-    req.user = decoded; // Add decoded user info to request
+    req.user = decoded;
     next();
   });
 };
 
 // Utility Functions
 async function getUserCredits(email) {
+  if (!email) {
+    logger.error("No email provided to getUserCredits");
+    return 0;
+  }
+
   const params = {
     TableName: USER_CREDITS_TABLE,
-    Key: { email },
+    Key: { email: email }  // Changed from userEmail to match your schema
   };
 
   try {
+    logger.info(`Fetching credits for user: ${email}`);
     const result = await dynamoDBDocClient.send(new GetCommand(params));
-    return result.Item ? result.Item.credits : 0; // Default to 0 if no record exists
+    return result.Item ? result.Item.credits : 0;
   } catch (error) {
-    console.error("Error fetching user credits:", error);
-    throw error;
+    logger.error("Error fetching user credits:", error);
+    return 0;
   }
 }
 
 async function updateUserCredits(email, credits) {
   const params = {
     TableName: USER_CREDITS_TABLE,
-    Key: { email },
+    Key: { email: email },  // Changed from userEmail to match schema
     UpdateExpression: "SET credits = :credits",
     ExpressionAttributeValues: { ":credits": credits },
-    ReturnValues: "UPDATED_NEW",
+    ReturnValues: "UPDATED_NEW"
   };
 
   try {
+    logger.info(`Updating credits for user ${email} to ${credits}`);
     await dynamoDBDocClient.send(new UpdateCommand(params));
   } catch (error) {
-    console.error("Error updating user credits:", error);
+    logger.error("Error updating user credits:", error);
     throw error;
   }
 }
 
 async function logSearchHistory(email, searchQuery, requestID, status, rawResponse = null, EnVrequestID = null) {
   const now = new Date();
-  const utc7Date = new Date(now.getTime() - 7 * 60 * 60 * 1000); // Adjust for UTC-7
+  const utc7Date = new Date(now.getTime() - 7 * 60 * 60 * 1000);
   const timestamp = utc7Date.toISOString();
 
   const params = {
-    TableName: SEARCH_HISTORY_TABLE, // This points to "EnV_SearchHistory"
+    TableName: SEARCH_HISTORY_TABLE,
     Item: {
-      requestID, // Use the app-generated ID
-      EnVrequestID: EnVrequestID || "N/A", // Ensure this field explicitly logs the EnVrequestID
-      email, // User email
-      timestamp, // Adjusted UTC-7 timestamp
-      searchQuery, // Input query submitted by the user
-      status, // Status of the request ("Success" or failure message)
-      rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A", // Log full raw API response
+      requestID,         // This is your partition key
+      timestamp,         // This is your sort key
+      email,            // Keep as 'email' to match schema
+      EnVrequestID: EnVrequestID || "N/A",
+      searchQuery,
+      status,
+      rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A",
     },
   };
 
   try {
-    logger.info("Attempting to log search history in DynamoDB:", params.Item);
-
-    // Perform the DynamoDB operation
+    logger.info(`Attempting to log search history for ${email}, requestID: ${requestID}`);
     await dynamoDBDocClient.send(new PutCommand(params));
-
-    logger.info("Search history logged successfully:", params.Item);
+    logger.info("Search history logged successfully:", { requestID, email });
   } catch (error) {
     logger.error("Error logging search history:", {
       errorMessage: error.message,
-      params: params.Item,
+      requestID,
+      email,
       stack: error.stack,
     });
     throw error;
   }
 }
 
-// Initialize Winston logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: "backend.log" }),
-  ],
-});
+async function signUpUser(userData) {
+  const params = {
+    ClientId: "64iqduh82e6tvd5orlkn7rktc8",
+    Username: userData.email,
+    Password: userData.password,
+    UserAttributes: [
+      { Name: "email", Value: userData.email },
+      { Name: "phone_number", Value: userData.phone },
+      { Name: "name", Value: userData.name },
+      { Name: "custom:companyName", Value: userData.companyName },
+      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
+      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
+      { Name: "custom:useCase", Value: userData.useCase },
+    ],
+  };
 
-// Initialize Express app
-const app = express();
-const port = 5000;
+  try {
+    const command = new SignUpCommand(params);
+    const response = await cognitoClient.send(command);
+    return response;
+  } catch (err) {
+    console.error("Error signing up user:", err);
+    throw err;
+  }
+}
 
-// Add CORS Middleware
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true,
-  })
-);
-
-// Add JSON parsing middleware
-app.use(bodyParser.json());
-
-// Log server initialization
-logger.info("Server initialized.");
-
+// Routes
 // Route: Secure Endpoint (Example for Token Validation)
 app.post("/secure-endpoint", verifyToken, (req, res) => {
   res.json({ message: "Secure access granted", user: req.user });
@@ -304,28 +341,26 @@ app.post("/create-checkout-session", async (req, res) => {
 // Route: Get Payment Methods
 app.post("/get-payment-methods", verifyToken, async (req, res) => {
     try {
-        // Extract user email from the token
         const email = req.user?.email;
+        logger.info(`Fetching payment methods for user: ${email}`);
 
         if (!email) {
             return res.status(401).send({ error: "Unauthorized access" });
         }
 
-        // Fetch or create the customer in Stripe
         const customers = await stripe.customers.list({ email });
         const customer = customers.data.find((c) => c.email === email);
 
         if (!customer) {
-            return res.status(404).send({ error: "Customer not found" });
+            logger.info(`No Stripe customer found for email: ${email}`);
+            return res.status(200).send({ paymentMethods: [], message: "No payment methods found" });
         }
 
-        // Fetch payment methods
         const paymentMethods = await stripe.paymentMethods.list({
             customer: customer.id,
             type: "card",
         });
 
-        // Simplify the response
         const simplifiedMethods = paymentMethods.data.map((method) => ({
             id: method.id,
             brand: method.card.brand,
@@ -334,17 +369,50 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
             exp_year: method.card.exp_year,
         }));
 
-        // Handle case when no payment methods are found
-        if (simplifiedMethods.length === 0) {
-            return res
-                .status(200)
-                .send({ paymentMethods: [], message: "No payment methods found" });
+        res.status(200).send({ paymentMethods: simplifiedMethods });
+        logger.info(`Successfully retrieved payment methods for ${email}`);
+    } catch (error) {
+        logger.error("Error fetching payment methods:", error.message);
+        res.status(500).send({ error: "Failed to fetch payment methods" });
+    }
+});
+
+// Route: Get Purchase History
+app.post("/get-purchase-history", async (req, res) => {
+    const { email } = req.body;
+    logger.info(`Fetching purchase history for user: ${email}`);
+
+    if (!email) {
+        return res.status(400).send({ error: { message: "Email is required" } });
+    }
+
+    try {
+        const customers = await stripe.customers.list({ email });
+        const customer = customers.data.find((c) => c.email === email);
+
+        if (!customer) {
+            logger.info(`No Stripe customer found for email: ${email}`);
+            return res.status(200).send({ history: [], message: "No purchase history found" });
         }
 
-        res.status(200).send({ paymentMethods: simplifiedMethods });
+        const paymentIntents = await stripe.paymentIntents.list({
+            customer: customer.id,
+            limit: 10,
+        });
+
+        const history = paymentIntents.data.map((payment) => ({
+            amount: payment.amount / 100,
+            currency: payment.currency.toUpperCase(),
+            status: payment.status,
+            date: new Date(payment.created * 1000).toLocaleString(),
+            description: payment.description || "Credit Purchase",
+        }));
+
+        res.status(200).send({ history });
+        logger.info(`Successfully retrieved purchase history for ${email}`);
     } catch (error) {
-        console.error("Error fetching payment methods:", error.message);
-        res.status(500).send({ error: "Failed to fetch payment methods" });
+        logger.error(`Error fetching purchase history: ${error.message}`);
+        res.status(500).send({ error: "Failed to fetch purchase history" });
     }
 });
 
@@ -566,59 +634,235 @@ app.post("/get-search-history", async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
+    logger.error("No email provided for search history request");
     return res.status(400).send({ error: { message: "Email is required" } });
   }
 
-  const params = {
-    TableName: SEARCH_HISTORY_TABLE,
-    FilterExpression: "email = :email",
-    ExpressionAttributeValues: {
-      ":email": email,
-    },
-  };
-
   try {
-    const data = await dynamoDBDocClient.send(new ScanCommand(params));
-    res.status(200).send({ history: data.Items || [] });
+    logger.info(`Fetching search history for user: ${email}`);
+    const data = await dynamoDBDocClient.send(new ScanCommand({
+      TableName: SEARCH_HISTORY_TABLE,
+      FilterExpression: "email = :email",
+      ExpressionAttributeValues: {
+        ":email": email
+      }
+    }));
+
+    if (!data.Items) {
+      logger.info(`No search history found for user: ${email}`);
+      return res.status(200).send({ history: [] });
+    }
+
+    logger.info(`Found ${data.Items.length} history items for user: ${email}`);
+    res.status(200).send({ history: data.Items });
   } catch (error) {
-    console.error("Error fetching search history:", error);
+    logger.error(`Error fetching search history: ${error.message}`, { email });
     res.status(500).send({ error: { message: "Internal Server Error" } });
   }
 });
 
-// Route: Get Purchase History
-app.post("/get-purchase-history", async (req, res) => {
-    const { email } = req.body;
+// Utility function to sign up a user in Cognito
+async function signUpUser(userData) {
+  const params = {
+    ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Cognito App Client ID
+    Username: userData.email,
+    Password: userData.password, // User-provided password
+    UserAttributes: [
+      { Name: "email", Value: userData.email },
+      { Name: "phone_number", Value: userData.phone },
+      { Name: "name", Value: userData.name },
+      { Name: "custom:companyName", Value: userData.companyName },
+      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
+      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
+      { Name: "custom:useCase", Value: userData.useCase },
+    ],
+  };
 
-    try {
-        // Find the Stripe customer by email
-        const customers = await stripe.customers.list({ email });
-        const customer = customers.data.find((c) => c.email === email);
+  try {
+    // Create a SignUpCommand and send it to Cognito
+    const command = new SignUpCommand(params);
+    const response = await cognitoClient.send(command);
+    return response;
+  } catch (err) {
+    console.error("Error signing up user:", err);
+    throw err;
+  }
+}
 
-        if (!customer) {
-            return res.status(404).send({ error: "Customer not found" });
-        }
+// Route: User Signup
+app.post("/signup", async (req, res) => {
+  const {
+    name,
+    email,
+    phone,
+    companyName,
+    companyWebsite,
+    companyEIN,
+    useCase,
+    termsAccepted,
+    password, // User-provided password
+  } = req.body;
 
-        // Fetch payment intents (purchase history)
-        const paymentIntents = await stripe.paymentIntents.list({
-            customer: customer.id,
-            limit: 10, // Fetch up to 10 most recent purchases
-        });
+  // Check if Terms and Conditions are accepted
+  if (!termsAccepted) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Terms and Conditions must be accepted." });
+  }
 
-        // Simplify the response
-        const history = paymentIntents.data.map((payment) => ({
-            amount: payment.amount / 100, // Convert to dollars
-            currency: payment.currency.toUpperCase(),
-            status: payment.status,
-            date: new Date(payment.created * 1000).toLocaleString(), // Convert to readable date
-            description: payment.description || "Credit Purchase",
-        }));
+  try {
+    // Prepare user data for signup
+    const userData = {
+      name,
+      email,
+      phone,
+      companyName,
+      companyWebsite,
+      companyEIN,
+      useCase,
+      password, // Include the password provided by the user
+    };
 
-        res.status(200).send({ history });
-    } catch (error) {
-        console.error("Error fetching purchase history:", error.message);
-        res.status(500).send({ error: "Failed to fetch purchase history" });
+    // Call the utility function to sign up the user
+    await signUpUser(userData);
+
+    // Respond with success
+    return res
+      .status(200)
+      .json({ success: true, message: "User signup successful." });
+  } catch (err) {
+    console.error("Error signing up user:", err);
+
+    // Handle Cognito-specific errors (e.g., UserExistsException)
+    if (err.name === "UsernameExistsException") {
+      return res
+        .status(409)
+        .json({ success: false, message: "User already exists." });
     }
+
+    // Handle general errors
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error. Please try again." });
+  }
+});
+
+// Route: Login
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Email and password are required.",
+    });
+  }
+
+  try {
+    // Parameters for Cognito login
+    const params = {
+      AuthFlow: "USER_PASSWORD_AUTH",
+      ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Replace with your Cognito App Client ID
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password,
+      },
+    };
+
+    // Initiate Cognito authentication
+    const command = new InitiateAuthCommand(params);
+    const response = await cognitoClient.send(command);
+
+    // Extract tokens from Cognito response
+    const accessToken = response.AuthenticationResult.AccessToken;
+    const idToken = response.AuthenticationResult.IdToken;
+    const refreshToken = response.AuthenticationResult.RefreshToken;
+
+    // Set tokens as secure, HttpOnly cookies
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Use HTTPS in production
+      sameSite: "Strict",
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    });
+
+    res.cookie("idToken", idToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Use HTTPS in production
+      sameSite: "Strict",
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // Use HTTPS in production
+      sameSite: "Strict",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    // Respond with success (no tokens in response body for added security)
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+
+    // Handle specific Cognito exceptions
+    if (err.name === "NotAuthorizedException") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
+      });
+    }
+    if (err.name === "UserNotFoundException") {
+      return res.status(404).json({
+        success: false,
+        message: "User does not exist.",
+      });
+    }
+
+    // Handle other errors
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error. Please try again.",
+    });
+  }
+});
+
+// Route: Validate Authentication
+app.get("/auth/validate", (req, res) => {
+  const accessToken = req.cookies.accessToken; // Get accessToken from cookies
+
+  if (!accessToken) {
+    console.error("No access token found in cookies");
+    return res.status(401).json({ success: false, message: "No access token found" });
+  }
+
+  // Function to retrieve the signing key
+  const getKey = (header, callback) => {
+    client.getSigningKey(header.kid, (err, key) => {
+      if (err) {
+        console.error("Error fetching signing key:", err.message);
+        return callback(err);
+      }
+      callback(null, key.getPublicKey());
+    });
+  };
+
+  // Verify the access token
+  jwt.verify(accessToken, getKey, { algorithms: ["RS256"] }, (err, decoded) => {
+    if (err) {
+      console.error("Token validation failed:", err.message);
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+
+    // Log decoded token for debugging
+    console.info("Token successfully validated:", decoded);
+
+    // Send user data if token is valid
+    res.status(200).json({ success: true, user: decoded });
+  });
 });
 
 // Start server
