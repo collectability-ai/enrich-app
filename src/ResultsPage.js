@@ -7,41 +7,64 @@ const ResultsPage = () => {
   const { state } = useLocation();
   const data = state?.data || {};
 
-  console.log("Data Received in ResultsPage:", data);
+  // Render a formatted address, leaving blank fields empty
+const renderAddress = (address) => {
+  if (!address) return "";
 
-  const renderAddress = (address) => {
-    if (!address) return "N/A";
-    return `${address.street}, ${address.city}, ${address.state} ${address.zip}`;
-  };
+  // Check if all fields are empty
+  const { street = "", city = "", state = "", zip = "" } = address;
+  if (!street && !city && !state && !zip) {
+    return ""; // Return an empty string if all fields are blank
+  }
 
-  const handleSavePDF = async () => {
-    const content = document.getElementById("resultsContent");
+  // Return formatted address
+  return `${street}${city ? `, ${city}` : ""}${state ? `, ${state}` : ""}${zip ? ` ${zip}` : ""}`;
+};
 
-    // Use html2canvas to capture the content
-    const canvas = await html2canvas(content, { scale: 2 });
-    const imgData = canvas.toDataURL("image/png");
+// Render a single value, leaving it blank if undefined or null
+const renderValue = (value) => {
+  return value || "";
+};
 
-    // Configure jsPDF
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+const handleSavePDF = async () => {
+  const { searchedPerson } = data;
 
-    // Add Logo
-    const logoUrl = `${window.location.origin}/logo.png`;
-    pdf.addImage(logoUrl, "PNG", 10, 10, 50, 15); // Adjust dimensions as needed
+  // Extract name for the file
+  const firstName = searchedPerson?.name?.split(" ")[0] || "User";
+  const lastName = searchedPerson?.name?.split(" ")[1] || "";
+  const fileName = `${firstName} ${lastName} - EnrichAndValidate Result.pdf`;
 
-    // Add content
-    const imgWidth = pageWidth - 20; // Add some margins
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  const content = document.getElementById("resultsContent");
 
-    // Center content and ensure it fits within page margins
-    const x = 10;
-    const y = 30; // Below the logo
-    pdf.addImage(imgData, "PNG", x, y, imgWidth, imgHeight > pageHeight - y ? pageHeight - y - 10 : imgHeight);
+  // Hide buttons before rendering
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((button) => (button.style.display = "none"));
 
-    const fileName = `${data.searchedPerson?.name || "User"} - Enrich and Validate.pdf`;
-    pdf.save(fileName);
-  };
+  // Capture the content with html2canvas
+  const canvas = await html2canvas(content, {
+    scale: 2,
+    useCORS: true,
+  });
+
+  // Restore buttons
+  buttons.forEach((button) => (button.style.display = ""));
+
+  const imgData = canvas.toDataURL("image/png");
+
+  // Configure jsPDF
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  const imgWidth = pageWidth - 20;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  let y = 10;
+  pdf.addImage(imgData, "PNG", 10, y, imgWidth, imgHeight);
+
+  // Save the PDF
+  pdf.save(fileName);
+};
 
   return (
     <div
@@ -51,118 +74,197 @@ const ResultsPage = () => {
         margin: "0 auto",
         fontFamily: "Arial, sans-serif",
         padding: "20px",
-        backgroundColor: "#f9f9f9",
+        backgroundColor: "#ffffff",
+        border: "1px solid #ddd",
         borderRadius: "8px",
-        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-        overflow: "hidden",
       }}
     >
+      {/* Header */}
       <header style={{ textAlign: "center", marginBottom: "20px" }}>
-        {/* Display Logo */}
         <img
           src="/logo.png"
           alt="Logo"
           style={{
             height: "50px",
-            marginBottom: "10px",
           }}
         />
+        <h1 style={{ fontSize: "20px", fontWeight: "bold" }}>Enrich and Validate</h1>
       </header>
 
       {/* Search Input Section */}
-      <div style={{ marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "10px" }}>Search Input</h2>
-        <p><strong>Name:</strong> {data.searchedPerson?.name || "N/A"}</p>
-        <p><strong>Phone:</strong> {data.searchedPerson?.searchedPhone || "N/A"}</p>
-        <p><strong>Email:</strong> {data.searchedPerson?.searchedEmail || "N/A"}</p>
-        <p>
-          <strong>Address:</strong> {renderAddress(data.searchedPerson?.searchedAddress)}
-        </p>
-      </div>
+<div
+  style={{
+    marginBottom: "20px",
+    padding: "15px",
+    backgroundColor: "#f9f9f9",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+  }}
+>
+  <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "10px" }}>Search Input</h2>
+  <table
+    style={{
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: "14px",
+    }}
+  >
+    <tbody>
+      <tr>
+  <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Name:</td>
+  <td style={{ border: "1px solid #ddd", padding: "8px" }}>{renderValue(data.searchedPerson?.name)}</td>
+</tr>
+<tr>
+  <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Phone:</td>
+  <td style={{ border: "1px solid #ddd", padding: "8px" }}>{renderValue(data.searchedPerson?.searchedPhone)}</td>
+</tr>
+<tr>
+  <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Email:</td>
+  <td style={{ border: "1px solid #ddd", padding: "8px" }}>{renderValue(data.searchedPerson?.searchedEmail)}</td>
+</tr>
+<tr>
+  <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Address:</td>
+  <td style={{ border: "1px solid #ddd", padding: "8px" }}>{renderAddress(data.searchedPerson?.searchedAddress)}</td>
+</tr>
+    </tbody>
+  </table>
+</div>
 
-      {/* Primary Validated Info Section */}
-      <div style={{ marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "10px" }}>Primary Validated Info</h2>
-        <p><strong>Name:</strong> {data.primaryVerified?.name || "N/A"}</p>
-        <p><strong>Phone:</strong> {data.primaryVerified?.phone || "N/A"}</p>
-        <p><strong>Email:</strong> {data.primaryVerified?.email || "N/A"}</p>
-        <p>
-          <strong>Address:</strong> {renderAddress(data.primaryVerified?.address)}
-        </p>
-        <p><strong>First Seen:</strong> {data.primaryVerified?.firstSeen || "N/A"}</p>
-        <p><strong>Last Seen:</strong> {data.primaryVerified?.lastSeen || "N/A"}</p>
-        <p>
-          <strong>Identity Confidence Score:</strong>{" "}
-          {data.primaryVerified?.identityConfidenceScore || "N/A"}
-        </p>
-        <p><strong>Fraud Risk:</strong> {data.primaryVerified?.fraudRisk || "N/A"}</p>
-      </div>
 
-      {/* Enriched Data Section */}
-      <div style={{ marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "10px" }}>Enriched Data</h2>
+      {/* Primary Validated Info */}
+     <div
+  style={{
+    marginBottom: "20px",
+    padding: "15px",
+    backgroundColor: "#f9f9f9",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+  }}
+>
+  <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "10px" }}>
+    Primary Validated Info
+  </h2>
+  <table
+    style={{
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: "14px",
+    }}
+  >
+    <tbody>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Name:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.name || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Phone:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.phone || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Email:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.email || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Address:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>
+          {renderAddress(data.primaryVerified?.address)}
+        </td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>First Seen:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.firstSeen || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Last Seen:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.lastSeen || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Identity Confidence Score:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.identityConfidenceScore || "N/A"}</td>
+      </tr>
+      <tr>
+        <td style={{ border: "1px solid #ddd", padding: "8px", fontWeight: "bold" }}>Fraud Risk:</td>
+        <td style={{ border: "1px solid #ddd", padding: "8px" }}>{data.primaryVerified?.fraudRisk || "N/A"}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
-        {/* Phones */}
-        {data.enrichedData?.phones?.length > 0 && (
-          <>
-            <h3 style={{ fontWeight: "bold", marginBottom: "5px" }}>Phones:</h3>
-            <ul>
-              {data.enrichedData.phones.map((phone, index) => (
-                <li key={index} style={{ marginBottom: "5px" }}>
-                  <strong>Number:</strong> {phone.number}, <strong>Type:</strong> {phone.type},{" "}
-                  <strong>Connected:</strong> {phone.isConnected ? "Yes" : "No"},{" "}
-                  <strong>First Reported:</strong> {phone.firstReportedDate},{" "}
-                  <strong>Last Reported:</strong> {phone.lastReportedDate}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+    {/* Enriched Data Section */}
+<div
+  style={{
+    marginBottom: "20px",
+    padding: "15px",
+    backgroundColor: "#f9f9f9",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+  }}
+>
+  <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "10px" }}>Enriched Data</h2>
 
-        {/* Emails */}
-        {data.enrichedData?.emails?.length > 0 && (
-          <>
-            <h3 style={{ fontWeight: "bold", marginBottom: "5px" }}>Emails:</h3>
-            <ul>
-              {data.enrichedData.emails.map((email, index) => (
-                <li key={index} style={{ marginBottom: "5px" }}>
-                  <strong>Address:</strong> {email.address},{" "}
-                  <strong>Validated:</strong> {email.isValidated ? "Yes" : "No"},{" "}
-                  <strong>Business:</strong> {email.isBusiness ? "Yes" : "No"}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+  {/* Phones */}
+  {data.enrichedData?.phones?.length > 0 && (
+    <div style={{ marginBottom: "15px" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Phones</h3>
+      <ul style={{ marginLeft: "20px", fontSize: "12px", lineHeight: "1.4" }}>
+        {data.enrichedData.phones.map((phone, index) => (
+          <li key={index}>
+            <strong>Number:</strong> {phone.number}, <strong>Type:</strong> {phone.type},{" "}
+            <strong>Connected:</strong> {phone.isConnected ? "Yes" : "No"},{" "}
+            <strong>First Reported:</strong> {phone.firstReportedDate},{" "}
+            <strong>Last Reported:</strong> {phone.lastReportedDate}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
 
-        {/* Addresses */}
-        {data.enrichedData?.addresses?.length > 0 && (
-          <>
-            <h3 style={{ fontWeight: "bold", marginBottom: "5px" }}>Addresses:</h3>
-            <ul>
-              {data.enrichedData.addresses.map((address, index) => (
-                <li key={index} style={{ marginBottom: "5px" }}>
-                  {renderAddress(address)}
-                  <br />
-                  <strong>First Reported:</strong> {address.firstReportedDate},{" "}
-                  <strong>Last Reported:</strong> {address.lastReportedDate}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
+  {/* Emails */}
+  {data.enrichedData?.emails?.length > 0 && (
+    <div style={{ marginBottom: "15px" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Emails</h3>
+      <ul style={{ marginLeft: "20px", fontSize: "12px", lineHeight: "1.4" }}>
+        {data.enrichedData.emails.map((email, index) => (
+          <li key={index}>
+            <strong>Address:</strong> {email.address}, <strong>Validated:</strong>{" "}
+            {email.isValidated ? "Yes" : "No"}, <strong>Business:</strong>{" "}
+            {email.isBusiness ? "Yes" : "No"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
 
-      {/* Buttons Section */}
-      <footer style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "20px" }}>
+  {/* Addresses */}
+  {data.enrichedData?.addresses?.length > 0 && (
+    <div style={{ marginBottom: "15px" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "8px" }}>Addresses</h3>
+      <ul style={{ marginLeft: "20px", fontSize: "12px", lineHeight: "1.4" }}>
+        {data.enrichedData.addresses.map((address, index) => (
+          <li key={index}>
+            {renderAddress(address)}
+            <br />
+            <strong>First Reported:</strong> {address.firstReportedDate},{" "}
+            <strong>Last Reported:</strong> {address.lastReportedDate}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+</div>
+
+
+      {/* Buttons */}
+      <footer style={{ textAlign: "center", marginTop: "20px" }}>
         <button
           onClick={handleSavePDF}
           style={{
+            marginRight: "10px",
             padding: "10px 20px",
             backgroundColor: "#007BFF",
-            color: "white",
+            color: "#fff",
             border: "none",
-            borderRadius: "4px",
+            borderRadius: "5px",
             cursor: "pointer",
           }}
         >
@@ -173,9 +275,9 @@ const ResultsPage = () => {
           style={{
             padding: "10px 20px",
             backgroundColor: "#6c757d",
-            color: "white",
+            color: "#fff",
             border: "none",
-            borderRadius: "4px",
+            borderRadius: "5px",
             cursor: "pointer",
           }}
         >

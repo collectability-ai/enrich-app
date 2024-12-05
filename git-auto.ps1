@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.2.4"
-$description = "Cognito Signup and Login fully functional. Added Dashboard enhancements and AWS Activate."
+$version = "v1.2.5"
+$description = "Updated UI of Search Response page. Fixed PDF export."
 
 # Add all changes
 git add .

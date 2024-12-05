@@ -18,7 +18,6 @@ const InputForm = ({ userEmail, userCredits }) => {
   const [showDialog, setShowDialog] = useState(false);
   const navigate = useNavigate();
 
-  // Map operation names to friendly names and credits
   const operationDetails = {
     validate: { name: "Validate", credits: 2 },
     enrich: { name: "Enrich", credits: 2 },
@@ -60,180 +59,143 @@ const InputForm = ({ userEmail, userCredits }) => {
   return (
     <div
       style={{
-        maxWidth: "600px",
-        margin: "0 auto",
+        backgroundColor: "#f5f5f5",
         padding: "20px",
-        border: "1px solid #ccc",
-        borderRadius: "8px",
-        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-        fontFamily: "Arial, sans-serif",
+        minHeight: "100vh",
       }}
     >
-      <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Search</h2>
-      <form onSubmit={handleSubmitClick}>
-        <div style={{ marginBottom: "10px" }}>
-          {/* Input fields */}
-          <input
-            type="text"
-            name="firstName"
-            placeholder="First Name"
-            value={searchQuery.firstName}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="text"
-            name="lastName"
-            placeholder="Last Name"
-            value={searchQuery.lastName}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="text"
-            name="addressLine1"
-            placeholder="Address Line 1"
-            value={searchQuery.addressLine1}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="text"
-            name="city"
-            placeholder="City"
-            value={searchQuery.city}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="text"
-            name="state"
-            placeholder="State"
-            value={searchQuery.state}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="text"
-            name="zip"
-            placeholder="ZIP Code"
-            value={searchQuery.zip}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={searchQuery.email}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <input
-            type="tel"
-            name="phone"
-            placeholder="Phone"
-            value={searchQuery.phone}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          />
-          <select
-            name="operation"
-            value={searchQuery.operation}
-            onChange={handleInputChange}
-            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
-          >
-            <option value="validate">Validate</option>
-            <option value="enrich">Enrich</option>
-            <option value="validate_and_enrich">Validate and Enrich</option>
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          style={{
-            width: "100%",
-            padding: "10px",
-            backgroundColor: "#007BFF",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          Submit
-        </button>
-      </form>
-
-      {/* Confirmation dialog */}
-      {showDialog && (
-        <div
-          style={{
-            position: "fixed",
-            top: "0",
-            left: "0",
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <div
+      <div
+        style={{
+          maxWidth: "600px",
+          margin: "0 auto",
+          backgroundColor: "white",
+          borderRadius: "8px",
+          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+          padding: "20px",
+        }}
+      >
+        <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Search</h2>
+        {error && <p style={{ color: "red", textAlign: "center" }}>{error}</p>}
+        <form onSubmit={handleSubmitClick}>
+          <div style={{ marginBottom: "15px" }}>
+            {[
+              { name: "firstName", placeholder: "First Name" },
+              { name: "lastName", placeholder: "Last Name" },
+              { name: "addressLine1", placeholder: "Address Line 1" },
+              { name: "city", placeholder: "City" },
+              { name: "state", placeholder: "State" },
+              { name: "zip", placeholder: "ZIP Code" },
+              { name: "email", placeholder: "Email", type: "email" },
+              { name: "phone", placeholder: "Phone", type: "tel" },
+            ].map(({ name, placeholder, type = "text" }) => (
+              <input
+                key={name}
+                type={type}
+                name={name}
+                placeholder={placeholder}
+                value={searchQuery[name]}
+                onChange={handleInputChange}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                }}
+              />
+            ))}
+            <select
+              name="operation"
+              value={searchQuery.operation}
+              onChange={handleInputChange}
+              style={{
+                width: "100%",
+                padding: "10px",
+                marginBottom: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+              }}
+            >
+              <option value="validate">Validate</option>
+              <option value="enrich">Enrich</option>
+              <option value="validate_and_enrich">Validate and Enrich</option>
+            </select>
+          </div>
+          <button
+            type="submit"
             style={{
-              backgroundColor: "white",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-              textAlign: "center",
-              width: "90%",
-              maxWidth: "400px",
+              width: "100%",
+              padding: "10px",
+              backgroundColor: "#67cad8",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
             }}
           >
-            <p>
-              You are about to use <strong>{selectedOperation.credits}</strong>{" "}
-              credit(s) to perform a{" "}
-              <strong>{selectedOperation.name}</strong> search.
-            </p>
-            <div style={{ marginTop: "20px" }}>
-              <button
-                onClick={handleConfirm}
-                style={{
-                  marginRight: "10px",
-                  padding: "10px",
-                  backgroundColor: "#007BFF",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Confirm
-              </button>
-              <button
-                onClick={handleCancel}
-                style={{
-                  padding: "10px",
-                  backgroundColor: "#FF0000",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
+            Submit
+          </button>
+        </form>
+        {showDialog && (
+          <div
+            style={{
+              position: "fixed",
+              top: "0",
+              left: "0",
+              width: "100%",
+              height: "100%",
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "white",
+                padding: "20px",
+                borderRadius: "8px",
+                boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+                textAlign: "center",
+              }}
+            >
+              <p>
+                You are about to use <strong>{selectedOperation.credits}</strong>{" "}
+                credit(s) for a <strong>{selectedOperation.name}</strong> search.
+              </p>
+              <div style={{ marginTop: "20px" }}>
+                <button
+                  onClick={handleConfirm}
+                  style={{
+                    marginRight: "10px",
+                    padding: "10px",
+                    backgroundColor: "#67cad8",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    padding: "10px",
+                    backgroundColor: "#FF0000",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <p style={{ color: "red", marginTop: "10px", textAlign: "center" }}>
-          {error}
-        </p>
-      )}
+        )}
+      </div>
     </div>
   );
 };

@@ -1,132 +1,134 @@
-import React, { useState } from "react";
-import { signIn, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
-import { useNavigate } from "react-router-dom";
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { signIn } from 'aws-amplify/auth';
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-  const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // Sign in using Amplify Auth
-      const { isSignedIn, nextStep } = await signIn({
-        username: formData.email,
-        password: formData.password,
-      });
-
-      console.log("Sign in result:", { isSignedIn, nextStep });
-
-      if (isSignedIn && nextStep.signInStep === "DONE") {
-        // Get current user
-        const user = await getCurrentUser();
-        console.log("Current user:", user);
-
-        // Get the current session
-        const session = await fetchAuthSession();
-        console.log("Current session:", session);
-
-        // Navigate to dashboard
-        navigate("/dashboard", { replace: true });
-      }
+      await signIn({ username: email, password });
     } catch (error) {
-      console.error("Login error:", error);
-      setError(
-        error.message || "An error occurred during login. Please try again."
-      );
-    } finally {
-      setIsLoading(false);
-    }
+      console.error('Error during sign in:', error);
+      
+      // Handling different error scenarios
+  if (error.message.includes('User does not exist')) {
+    setError('No account found with this email address. Need an account? Sign up now.');
+  } else if (error.message.includes('Incorrect username or password')) {
+    setError('Incorrect password');
+    setShowForgotPassword(true);
+  } else {
+    setError('An error occurred. Please try again.');
+  }
+}
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          width: "400px",
-          backgroundColor: "white",
-          borderRadius: "8px",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-          padding: "20px",
-        }}
-      >
-        <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Login</h2>
-        {error && <p style={{ color: "red", textAlign: "center" }}>{error}</p>}
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Email Address</label>
+    <div className="auth-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Main Login Form */}
+      <div style={{
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+        width: '100%',
+        maxWidth: '400px',
+        marginBottom: '1rem'
+      }}>
+        <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Log In</h2>
+        
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label htmlFor="email">Email</label>
             <input
               type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px'
               }}
+              required
             />
           </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Password</label>
+          
+          <div>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px'
               }}
+              required
             />
           </div>
+
+          {error && (
+            <div style={{ color: 'red', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              {error}
+            </div>
+          )}
+
+          {showForgotPassword && (
+            <Link 
+              to="/forgot-password" 
+              style={{ 
+                color: '#67cad8', 
+                textDecoration: 'none', 
+                fontSize: '0.9rem' 
+              }}
+            >
+              Forgot your password?
+            </Link>
+          )}
+
           <button
             type="submit"
-            disabled={isLoading}
             style={{
-              width: "100%",
-              padding: "10px",
-              backgroundColor: isLoading ? "#ccc" : "#67cad8",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: isLoading ? "not-allowed" : "pointer",
+              backgroundColor: '#67cad8',
+              color: 'white',
+              padding: '0.75rem',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginTop: '1rem'
             }}
           >
-            {isLoading ? "Logging in..." : "Login"}
+            Log In
           </button>
         </form>
+      </div>
+
+      {/* Sign Up Link */}
+      <div style={{
+        textAlign: 'center',
+        marginTop: '1rem',
+        color: '#666'
+      }}>
+        Not a current user? {' '}
+        <Link 
+          to="/signup" 
+          style={{ 
+            color: '#67cad8', 
+            textDecoration: 'none',
+            fontWeight: 'bold'
+          }}
+        >
+          Sign up HERE
+        </Link>
       </div>
     </div>
   );
