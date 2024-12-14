@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.2.6"
-$description = Complete UI overhaul. All functions tested as working.
+$version = "v1.2.7"
+$description = Upgraded Stripe Wallet functions - add, remove, set as default.
 
 # Add all changes
 git add .

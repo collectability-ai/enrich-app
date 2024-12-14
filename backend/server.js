@@ -498,6 +498,10 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
             return res.status(200).send({ paymentMethods: [], message: "No payment methods found" });
         }
 
+        // Get the customer's default payment method
+        const customerData = await stripe.customers.retrieve(customer.id);
+        const defaultPaymentMethodId = customerData.invoice_settings?.default_payment_method;
+
         const paymentMethods = await stripe.paymentMethods.list({
             customer: customer.id,
             type: "card",
@@ -509,6 +513,7 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
             last4: method.card.last4,
             exp_month: method.card.exp_month,
             exp_year: method.card.exp_year,
+            isDefault: method.id === defaultPaymentMethodId // Add isDefault flag
         }));
 
         res.status(200).send({ paymentMethods: simplifiedMethods });
@@ -516,6 +521,169 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
     } catch (error) {
         logger.error("Error fetching payment methods:", error.message);
         res.status(500).send({ error: "Failed to fetch payment methods" });
+    }
+});
+
+// Create setup intent route
+app.post("/create-setup-intent", verifyToken, async (req, res) => {
+    try {
+        const email = req.user?.email;
+        logger.info(`Creating setup intent for user: ${email}`);
+
+        if (!email) {
+            return res.status(401).send({ error: "Unauthorized access" });
+        }
+
+        const customers = await stripe.customers.list({ email });
+        let customer = customers.data[0];
+        
+        if (!customer) {
+            customer = await stripe.customers.create({ email });
+            logger.info(`Created new customer: ${customer.id}`);
+        }
+
+        const paymentMethods = await stripe.paymentMethods.list({
+            customer: customer.id,
+            type: "card",
+        });
+
+        if (paymentMethods.data.length >= 2) {
+            return res.status(400).send({ 
+                error: "Maximum of 2 payment methods allowed. Please remove one before adding another." 
+            });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            mode: 'setup',
+            customer: customer.id,
+            success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_success=true`,
+            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_canceled=true`,
+        });
+
+        res.status(200).send({ url: session.url });
+        logger.info(`Setup session created for ${email}: ${session.id}`);
+
+    } catch (error) {
+        logger.error("Error creating setup intent:", error);
+        res.status(500).send({ error: "Failed to create setup intent" });
+    }
+});
+
+// Set default payment method
+app.post("/set-default-payment", verifyToken, async (req, res) => {
+    try {
+        const email = req.user?.email;
+        const { paymentMethodId } = req.body;
+
+        if (!email || !paymentMethodId) {
+            return res.status(400).send({ error: "Email and payment method ID are required" });
+        }
+
+        const customers = await stripe.customers.list({ email });
+        const customer = customers.data[0];
+
+        if (!customer) {
+            return res.status(404).send({ error: "Customer not found" });
+        }
+
+        // Update customer's default payment method
+        await stripe.customers.update(customer.id, {
+            invoice_settings: {
+                default_payment_method: paymentMethodId,
+            },
+        });
+
+        // Get updated payment methods to return
+        const customerData = await stripe.customers.retrieve(customer.id);
+        const defaultPaymentMethodId = customerData.invoice_settings?.default_payment_method;
+
+        const paymentMethods = await stripe.paymentMethods.list({
+            customer: customer.id,
+            type: "card",
+        });
+
+        const simplifiedMethods = paymentMethods.data.map((method) => ({
+            id: method.id,
+            brand: method.card.brand,
+            last4: method.card.last4,
+            exp_month: method.card.exp_month,
+            exp_year: method.card.exp_year,
+            isDefault: method.id === defaultPaymentMethodId
+        }));
+
+        res.status(200).send({ success: true, paymentMethods: simplifiedMethods });
+        logger.info(`Default payment method updated for ${email}`);
+    } catch (error) {
+        logger.error("Error setting default payment method:", error);
+        res.status(500).send({ error: "Failed to set default payment method" });
+    }
+});
+
+// Delete payment method
+app.post("/delete-payment-method", verifyToken, async (req, res) => {
+    try {
+        const email = req.user?.email;
+        const { paymentMethodId } = req.body;
+
+        if (!email || !paymentMethodId) {
+            return res.status(400).send({ error: "Email and payment method ID are required" });
+        }
+
+        const customers = await stripe.customers.list({ email });
+        const customer = customers.data[0];
+
+        if (!customer) {
+            return res.status(404).send({ error: "Customer not found" });
+        }
+
+        // Check if this is the default payment method
+        const customerData = await stripe.customers.retrieve(customer.id);
+        const isDefault = customerData.invoice_settings?.default_payment_method === paymentMethodId;
+
+        // If this is the default payment method and there's another payment method, set the other one as default
+        if (isDefault) {
+            const paymentMethods = await stripe.paymentMethods.list({
+                customer: customer.id,
+                type: "card",
+            });
+
+            const otherPaymentMethod = paymentMethods.data.find(pm => pm.id !== paymentMethodId);
+            if (otherPaymentMethod) {
+                await stripe.customers.update(customer.id, {
+                    invoice_settings: {
+                        default_payment_method: otherPaymentMethod.id,
+                    },
+                });
+            }
+        }
+
+        // Detach the payment method
+        await stripe.paymentMethods.detach(paymentMethodId);
+
+        // Get updated payment methods to return
+        const updatedPaymentMethods = await stripe.paymentMethods.list({
+            customer: customer.id,
+            type: "card",
+        });
+
+        const updatedCustomerData = await stripe.customers.retrieve(customer.id);
+        const defaultPaymentMethodId = updatedCustomerData.invoice_settings?.default_payment_method;
+
+        const simplifiedMethods = updatedPaymentMethods.data.map((method) => ({
+            id: method.id,
+            brand: method.card.brand,
+            last4: method.card.last4,
+            exp_month: method.card.exp_month,
+            exp_year: method.card.exp_year,
+            isDefault: method.id === defaultPaymentMethodId
+        }));
+
+        res.status(200).send({ success: true, paymentMethods: simplifiedMethods });
+        logger.info(`Payment method deleted for ${email}`);
+    } catch (error) {
+        logger.error("Error deleting payment method:", error);
+        res.status(500).send({ error: "Failed to delete payment method" });
     }
 });
 
