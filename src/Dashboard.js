@@ -20,6 +20,7 @@ const Dashboard = ({ token, email }) => {
   const [historyError, setHistoryError] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState({ show: false, paymentMethodId: null, cardInfo: null });
   const [error, setError] = useState(null);
 
   // Token decoding effect
@@ -275,36 +276,9 @@ const Dashboard = ({ token, email }) => {
     }
   };
 
-  const handleDelete = async (paymentMethodId) => {
-    if (!window.confirm('Are you sure you want to remove this payment method?')) {
-      return;
-    }
-
-    try {
-      await axios.post(
-        "http://localhost:5000/delete-payment-method",
-        { paymentMethodId },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      
-      const response = await axios.post(
-        "http://localhost:5000/get-payment-methods",
-        { email: userEmail },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      setPaymentMethods(response.data.paymentMethods || []);
-    } catch (error) {
-      setPaymentsError('Failed to delete payment method');
-    }
-  };
+const handleDelete = (paymentMethodId, cardInfo) => {
+  setShowDeleteConfirm({ show: true, paymentMethodId, cardInfo });
+};
 
   // Render component
   return (
@@ -489,52 +463,110 @@ const Dashboard = ({ token, email }) => {
       </div>
 
       {/* Confirmation Modal */}
-      {showPopup && paymentMethods && paymentMethods[0] && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
-            <h3 className="text-xl font-semibold mb-4">Confirm Purchase</h3>
-            <p className="text-gray-600 mb-6">
-              You are about to purchase <span className="font-medium text-gray-800">50 credits for $19.97</span>
-              <br />
-              using <span className="font-medium text-gray-800">{paymentMethods[0].brand} •••• {paymentMethods[0].last4}</span>
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleQuickBuy}
-                disabled={processing}
-                className={`flex-1 px-4 py-2 rounded-md text-white font-medium transition-colors inline-flex items-center justify-center gap-2 
-                  ${processing 
-                    ? "bg-gray-400 cursor-not-allowed" 
-                    : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
-              >
-                {processing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  "Confirm"
-                )}
-              </button>
-              <button
-                onClick={() => setShowPopup(false)}
-                disabled={processing}
-                className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+     {showPopup && paymentMethods && paymentMethods[0] && (
+       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+         <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+           <h3 className="text-xl font-semibold mb-4">Confirm Purchase</h3>
+           <p className="text-gray-600 mb-6">
+             You are about to purchase <span className="font-medium text-gray-800">50 credits for $19.97</span>
+             <br />
+             using <span className="font-medium text-gray-800">{paymentMethods[0].brand} •••• {paymentMethods[0].last4}</span>
+           </p>
+           <div className="flex gap-3">
+             <button
+               onClick={handleQuickBuy}
+               disabled={processing}
+               className={`flex-1 px-4 py-2 rounded-md text-white font-medium transition-colors inline-flex items-center justify-center gap-2 
+                 ${processing 
+                   ? "bg-gray-400 cursor-not-allowed" 
+                   : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
+             >
+               {processing ? (
+                 <>
+                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                   <span>Processing...</span>
+                 </>
+               ) : (
+                 "Confirm"
+               )}
+             </button>
+             <button
+               onClick={() => setShowPopup(false)}
+               disabled={processing}
+               className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
+             >
+               Cancel
+             </button>
+           </div>
+         </div>
+       </div>
+     )}
 
-      {/* Success Modal */}
-      <SuccessModal 
-        isOpen={showSuccessModal} 
-        onClose={() => setShowSuccessModal(false)} 
-      />
+     {/* Success Modal */}
+     <SuccessModal 
+       isOpen={showSuccessModal} 
+       onClose={() => setShowSuccessModal(false)} 
+     />
+
+     {/* Delete Confirmation Modal */}
+{showDeleteConfirm.show && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+      <h3 className="text-xl font-semibold mb-4">Confirm Removal</h3>
+      <p className="text-gray-600 mb-6">
+        Are you sure you want to remove this card?
+        {showDeleteConfirm.cardInfo && (
+          <span className="block mt-2 font-medium">
+            {showDeleteConfirm.cardInfo.brand} •••• {showDeleteConfirm.cardInfo.last4}
+          </span>
+        )}
+      </p>
+      <div className="flex gap-3">
+        <button
+          onClick={async () => {  // Add async here
+            try {
+              await axios.post(
+                "http://localhost:5000/delete-payment-method",
+                { paymentMethodId: showDeleteConfirm.paymentMethodId },
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              
+              const response = await axios.post(
+                "http://localhost:5000/get-payment-methods",
+                { email: userEmail },
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              setPaymentMethods(response.data.paymentMethods || []);
+              setShowDeleteConfirm({ show: false, paymentMethodId: null, cardInfo: null });
+            } catch (error) {
+              setPaymentsError('Failed to delete payment method');
+              setShowDeleteConfirm({ show: false, paymentMethodId: null, cardInfo: null });
+            }
+          }}
+          className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md font-medium transition-colors"
+        >
+          Remove
+        </button>
+        <button
+          onClick={() => setShowDeleteConfirm({ show: false, paymentMethodId: null, cardInfo: null })}
+          className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
-  );
+  </div>
+)}
+   </div>
+ );
 };
 
 export default Dashboard;
