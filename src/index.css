@@ -1,23 +1,21 @@
-/* Reset and box-sizing */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Global font styles */
-body {
-  font-family: 'Arial', 'Helvetica Neue', sans-serif; /* Ensures sans-serif fonts */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f8f9fa; /* Light background for a cleaner look */
-  color: #333; /* Default text color */
-}
+/* Custom base styles - these will extend Tailwind's base layer */
+@layer base {
+  * {
+    @apply m-0 p-0 box-border;
+  }
 
-/* Styling for code elements */
-code {
-  font-family: 'Courier New', Consolas, 'Monaco', monospace;
-  background-color: #f4f4f4; /* Light gray background for code blocks */
-  padding: 4px;
-  border-radius: 4px;
+  body {
+    @apply font-sans antialiased bg-gray-50 text-gray-800;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code {
+    @apply font-mono bg-gray-100 p-1 rounded;
+  }
 }

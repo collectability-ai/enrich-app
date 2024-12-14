@@ -1,134 +1,31 @@
-// Load environment variables at the very top
-require("dotenv").config();
+// Load dependencies and configuration
+const {
+  app,
+  express,
+  stripe,
+  logger,
+  verifyToken,
+  dynamoDBDocClient,
+  CREDIT_COSTS,
+  USER_CREDITS_TABLE,
+  SEARCH_HISTORY_TABLE,
+} = require("./server-config");
 
-// Core dependencies
-const express = require("express");
-const cookieParser = require("cookie-parser");
-const bodyParser = require("body-parser");
-const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
-const winston = require("winston");
-const cors = require("cors");
-
-// AWS SDK imports
-const { CognitoIdentityProviderClient } = require("@aws-sdk/client-cognito-identity-provider");
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const {
   DynamoDBDocumentClient,
   GetCommand,
+  ScanCommand,
   UpdateCommand,
   PutCommand,
-  ScanCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { SignatureV4 } = require("@aws-sdk/signature-v4");
-const { fromEnv } = require("@aws-sdk/credential-providers");
-const { Sha256 } = require("@aws-crypto/sha256-js");
+
+// AWS SDK v3 imports for API signing
 const { HttpRequest } = require("@aws-sdk/protocol-http");
-const { SignUpCommand, InitiateAuthCommand } = require("@aws-sdk/client-cognito-identity-provider");
-
-// Other dependencies
+const { SignatureV4 } = require("@aws-sdk/signature-v4");
+const { Sha256 } = require("@aws-crypto/sha256-browser");
 const axios = require("axios");
-const jwt = require("jsonwebtoken");
-const jwksClient = require("jwks-rsa");
 
-// API and Configuration
-const API_KEY = process.env.ENRICH_VALIDATE_API_KEY;
-
-// Configure DynamoDB Client
-const dynamoDBClient = new DynamoDBClient({ region: "us-east-2" });
-const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
-
-// Table Names
-const USER_CREDITS_TABLE = "EnV_UserCredits";
-const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
-
-// AWS Region
-const region = "us-east-2";
-
-// Initialize SignatureV4 signer for API requests
-const signer = new SignatureV4({
-  service: "execute-api",
-  region: "us-east-2",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-// Configure JWKS client for Cognito
-const client = jwksClient({
-  jwksUri: "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_EHz7xWNbm/.well-known/jwks.json",
-});
-
-// Initialize Winston logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: "backend.log" }),
-  ],
-});
-
-// Define credit costs for each operation type
-const CREDIT_COSTS = {
-  validate: 2,
-  enrich: 2,
-  validate_and_enrich: 3,
-};
-
-// Initialize Express app
-const app = express();
-const port = 5000;
-
-// Add CORS Middleware
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST"],
-    credentials: true,
-  })
-);
-
-// Use cookie-parser middleware
-app.use(cookieParser());
-
-// Add JSON parsing middleware
-app.use(bodyParser.json());
-
-// Log server initialization
-logger.info("Server initialized.");
-
-// Middleware to validate tokens
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Missing token" });
-  }
-
-  const getKey = (header, callback) => {
-    client.getSigningKey(header.kid, (err, key) => {
-      if (err) {
-        return callback(err);
-      }
-      const signingKey = key.getPublicKey();
-      callback(null, signingKey);
-    });
-  };
-
-  jwt.verify(token, getKey, { algorithms: ["RS256"] }, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-    req.user = decoded;
-    next();
-  });
-};
-
-// Utility Functions
+// Enhanced Utility Functions
 async function getUserCredits(email) {
   if (!email) {
     logger.error("No email provided to getUserCredits");
@@ -137,7 +34,7 @@ async function getUserCredits(email) {
 
   const params = {
     TableName: USER_CREDITS_TABLE,
-    Key: { email: email }  // Changed from userEmail to match your schema
+    Key: { email: email },
   };
 
   try {
@@ -150,45 +47,72 @@ async function getUserCredits(email) {
   }
 }
 
-async function updateUserCredits(email, credits) {
-  const params = {
-    TableName: USER_CREDITS_TABLE,
-    Key: { email: email },  // Changed from userEmail to match schema
-    UpdateExpression: "SET credits = :credits",
-    ExpressionAttributeValues: { ":credits": credits },
-    ReturnValues: "UPDATED_NEW"
-  };
-
-  try {
-    logger.info(`Updating credits for user ${email} to ${credits}`);
-    await dynamoDBDocClient.send(new UpdateCommand(params));
-  } catch (error) {
-    logger.error("Error updating user credits:", error);
-    throw error;
+async function updateUserCreditsWithRetry(email, credits, maxRetries = 3) {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      logger.info(`Attempt ${retries + 1}: Updating credits for user ${email} to ${credits}`);
+      await dynamoDBDocClient.send(
+        new UpdateCommand({
+          TableName: USER_CREDITS_TABLE,
+          Key: { email },
+          UpdateExpression: "SET credits = :credits",
+          ExpressionAttributeValues: { ":credits": credits },
+          ReturnValues: "UPDATED_NEW",
+        })
+      );
+      logger.info(`Successfully updated credits for ${email}`);
+      return true;
+    } catch (error) {
+      logger.error(`Attempt ${retries + 1} failed:`, error);
+      retries++;
+      if (retries === maxRetries) {
+        throw new Error('Failed to update credits after multiple attempts');
+      }
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+    }
   }
 }
 
-async function logSearchHistory(email, searchQuery, requestID, status, rawResponse = null, EnVrequestID = null) {
-  const now = new Date();
-  const utc7Date = new Date(now.getTime() - 7 * 60 * 60 * 1000);
-  const timestamp = utc7Date.toISOString();
+async function verifyCreditsUpdate(email, expectedCredits, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const currentCredits = await getUserCredits(email);
+    if (currentCredits === expectedCredits) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+  }
+  return false;
+}
 
-  const params = {
-    TableName: SEARCH_HISTORY_TABLE,
-    Item: {
-      requestID,         // This is your partition key
-      timestamp,         // This is your sort key
-      email,            // Keep as 'email' to match schema
-      EnVrequestID: EnVrequestID || "N/A",
-      searchQuery,
-      status,
-      rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A",
-    },
-  };
+async function logSearchHistory(
+  email,
+  searchQuery,
+  requestID,
+  status,
+  rawResponse = null,
+  EnVrequestID = null
+) {
+  const now = new Date();
+  const timestamp = new Date(now.getTime() - 7 * 60 * 60 * 1000).toISOString();
 
   try {
-    logger.info(`Attempting to log search history for ${email}, requestID: ${requestID}`);
-    await dynamoDBDocClient.send(new PutCommand(params));
+    logger.info(`Logging search history for ${email}, requestID: ${requestID}`);
+    await dynamoDBDocClient.send(
+      new PutCommand({
+        TableName: SEARCH_HISTORY_TABLE,
+        Item: {
+          requestID,
+          timestamp,
+          email,
+          EnVrequestID: EnVrequestID || "N/A",
+          searchQuery,
+          status,
+          rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A",
+        },
+      })
+    );
     logger.info("Search history logged successfully:", { requestID, email });
   } catch (error) {
     logger.error("Error logging search history:", {
@@ -199,6 +123,35 @@ async function logSearchHistory(email, searchQuery, requestID, status, rawRespon
     });
     throw error;
   }
+}
+
+async function validatePurchaseRequest(email, priceId, paymentMethodId) {
+  if (!email || !priceId || !paymentMethodId) {
+    throw new Error('Missing required fields');
+  }
+
+  // Verify user exists
+  const userCredits = await getUserCredits(email);
+  if (userCredits === null) {
+    await initializeUserCredits(email);
+  }
+
+  // Verify price ID is valid
+  const creditTiers = {
+    'price_1QOubIAUGHTClvwyCb4r0ffE': { amount: 200, credits: 3 },
+    'price_1QOv9IAUGHTClvwyRj2ChIb3': { amount: 597, credits: 10 },
+    'price_1QOv9IAUGHTClvwyzELdaAiQ': { amount: 1997, credits: 50 },
+    'price_1QOv9IAUGHTClvwyxw7vJURF': { amount: 4997, credits: 150 },
+    'price_1QOv9IAUGHTClvwyMRquKtpG': { amount: 11997, credits: 500 },
+    'price_1QOv9IAUGHTClvwyBH9Jh7ir': { amount: 19997, credits: 1000 },
+    'price_1QOv9IAUGHTClvwykbXsElbr': { amount: 27997, credits: 1750 }
+  };
+
+  if (!creditTiers[priceId]) {
+    throw new Error('Invalid price ID');
+  }
+
+  return creditTiers[priceId];
 }
 
 async function signUpUser(userData) {
@@ -218,12 +171,77 @@ async function signUpUser(userData) {
   };
 
   try {
-    const command = new SignUpCommand(params);
-    const response = await cognitoClient.send(command);
-    return response;
+    logger.info(`Signing up user: ${userData.email}`);
+    return await cognitoClient.send(new SignUpCommand(params));
+  } catch (error) {
+    logger.error("Error signing up user:", error);
+    throw error;
+  }
+}
+
+// Stripe Webhook Handler
+app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
+  const sig = request.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      request.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
-    console.error("Error signing up user:", err);
-    throw err;
+    logger.error('Webhook signature verification failed:', err.message);
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the checkout.session.completed event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    
+    try {
+      const customerEmail = session.metadata.userEmail;
+      const creditsToAdd = parseInt(session.metadata.credits);
+      
+      // Fetch current credits
+      const currentCredits = await getUserCredits(customerEmail);
+      
+      // Update with new credits
+      await updateUserCredits(customerEmail, currentCredits + creditsToAdd);
+      
+      logger.info(`Credits updated after successful checkout: ${customerEmail} +${creditsToAdd}`);
+    } catch (error) {
+      logger.error('Error updating credits after checkout:', error);
+    }
+  }
+
+  response.json({received: true});
+});
+
+// Enhanced Initialize User Function
+async function initializeUserCredits(email) {
+  try {
+    const params = {
+      TableName: USER_CREDITS_TABLE,
+      Item: {
+        email,
+        credits: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      ConditionExpression: "attribute_not_exists(email)"
+    };
+
+    await dynamoDBDocClient.send(new PutCommand(params));
+    logger.info(`Initialized new user: ${email}`);
+    return true;
+  } catch (error) {
+    if (error.name === 'ConditionalCheckFailedException') {
+      logger.info(`User ${email} already exists`);
+      return true;
+    }
+    logger.error('Error initializing user credits:', error);
+    return false;
   }
 }
 
@@ -236,105 +254,229 @@ app.post("/secure-endpoint", verifyToken, (req, res) => {
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
   const { email, priceId, paymentMethodId } = req.body;
+  let paymentIntent = null;
 
   try {
-    // Fetch or create the customer in Stripe
+    logger.info("Purchase pack request received:", { email, priceId, paymentMethodId });
+
+    // Validate required fields
+    if (!email || !priceId || !paymentMethodId) {
+      throw new Error('Missing required fields');
+    }
+
+    // Ensure user exists in DynamoDB
+    const currentCredits = await getUserCredits(email);
+    if (currentCredits === null) {
+      await initializeUserCredits(email);
+    }
+
+    // Get or create Stripe customer
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
     if (!customer) {
       customer = await stripe.customers.create({ email });
+      logger.info("Created new customer:", customer.id);
     }
 
-    // Ensure a valid payment method is available
-    let paymentMethod = paymentMethodId || customer.invoice_settings.default_payment_method;
-
-    if (!paymentMethod) {
-      return res.status(400).send({
-        error: { message: "No default payment method on file. Please add one." },
-      });
-    }
-
-    // Define the credit tiers and their Stripe price IDs
+    // Define credit tiers
     const creditTiers = {
+      "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 },
       "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
       "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
       "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
       "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
       "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
-      "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 },
-      "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 }, // Single validate_and_enrich
+      "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 }
     };
 
-    // Get the corresponding tier from the priceId
     const selectedTier = creditTiers[priceId];
-
     if (!selectedTier) {
-      return res.status(400).send({ error: { message: "Invalid price ID" } });
+      throw new Error('Invalid price ID');
     }
 
-    // Create the payment intent in Stripe
-const paymentIntent = await stripe.paymentIntents.create({
-  amount: selectedTier.amount,
-  currency: "usd",
-  customer: customer.id,
-  payment_method: paymentMethod,
-  confirm: true,
-  automatic_payment_methods: {
-    enabled: true,
-    allow_redirects: "never", // Explicitly disallow redirect-based payment methods
-  },
-});
+    // Create payment intent
+    paymentIntent = await stripe.paymentIntents.create({
+      amount: selectedTier.amount,
+      currency: "usd",
+      customer: customer.id,
+      payment_method: paymentMethodId,
+      confirm: true,
+      metadata: {
+        credits: selectedTier.credits,
+        userEmail: email
+      },
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never"
+      }
+    });
 
-    // Fetch current credits and update them with the purchased credits
-    const currentCredits = await getUserCredits(email);
+    // Update credits with retry mechanism
+    const newCredits = (currentCredits || 0) + selectedTier.credits;
+    await updateUserCreditsWithRetry(email, newCredits);
 
-    if (currentCredits === null) {
-      logger.error(`No existing credits found for user: ${email}`);
-      throw new Error("User not found in credits database.");
+    // Verify credits were updated
+    const verified = await verifyCreditsUpdate(email, newCredits);
+    if (!verified) {
+      logger.error('Credits update verification failed', {
+        email,
+        expectedCredits: newCredits,
+        paymentIntentId: paymentIntent.id
+      });
+      
+      // Still return success but flag for admin attention
+      res.status(200).send({
+        message: "Payment processed successfully. Credits may take a few minutes to appear.",
+        remainingCredits: await getUserCredits(email),
+        requiresVerification: true
+      });
+      return;
     }
 
-    const updatedCredits = currentCredits + selectedTier.credits;
-    await updateUserCredits(email, updatedCredits);
-
-    // Log the successful credit update
-    logger.info(`Credits updated for ${email}: ${updatedCredits}`);
-
-    // Send the success response
+    // Success response
     res.status(200).send({
       message: "Credits purchased successfully.",
-      remainingCredits: updatedCredits,
+      remainingCredits: newCredits
     });
+
   } catch (err) {
-    // Handle errors gracefully
-    logger.error(`Error purchasing credits for ${email}: ${err.message}`, {
-      stack: err.stack,
+    logger.error(`Error purchasing credits for ${email}:`, err);
+
+    // If payment was processed but credits failed
+    if (paymentIntent?.status === 'succeeded') {
+      logger.error('CRITICAL: Payment succeeded but credits failed to update', {
+        email,
+        paymentIntentId: paymentIntent.id,
+        error: err.message
+      });
+
+      res.status(500).send({
+        error: {
+          message: "Payment processed but credits may be delayed. Our team has been notified.",
+          paymentIntentId: paymentIntent.id,
+          requiresSupport: true
+        }
+      });
+      return;
+    }
+
+    // Handle Stripe-specific errors
+    if (err.type === 'StripeCardError') {
+      res.status(400).send({
+        error: {
+          message: "Your card was declined. Please try a different payment method.",
+          code: err.code
+        }
+      });
+      return;
+    }
+
+    // General error response
+    res.status(400).send({
+      error: {
+        message: err.message || "Purchase failed. Please try again."
+      }
     });
-    res.status(400).send({ error: { message: err.message } });
   }
 });
 
-
-// Route: Create Stripe Checkout Session
+// Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
+  const { email, priceId } = req.body;
+
+  logger.info("Creating checkout session for:", { email, priceId });
+
+  // Define the credit tiers and their Stripe price IDs
+  const creditTiers = {
+    "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
+    "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
+    "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
+    "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
+    "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
+    "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 },
+    "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 }
+  };
+
   try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"], // Accepts card payments
-      line_items: [
-        {
-          price: "price_1QOv9IAUGHTClvwyzELdaAiQ", // 50-credit pack price ID
-          quantity: 1,
-        },
-      ],
-      mode: "payment", // One-time payment
-      success_url: "http://localhost:3000/dashboard?status=success", // Adjust for production
-      cancel_url: "http://localhost:3000/dashboard?status=cancel", // Adjust for production
+    // Validate request data
+    if (!email || !priceId) {
+      logger.error("Missing required fields:", { email, priceId });
+      return res.status(400).send({ error: "Email and Price ID are required" });
+    }
+
+    // Validate price ID
+    if (!creditTiers[priceId]) {
+      logger.error("Invalid price ID:", priceId);
+      return res.status(400).send({ error: "Invalid price ID" });
+    }
+
+    // Look for an existing customer
+    let customer;
+    const existingCustomers = await stripe.customers.list({
+      email: email,
+      limit: 1,
     });
 
-    res.json({ url: session.url }); // Respond with Stripe Checkout Session URL
+    if (existingCustomers.data.length === 0) {
+      customer = await stripe.customers.create({
+        email: email,
+      });
+      logger.info("Created new customer:", customer.id);
+    } else {
+      customer = existingCustomers.data[0];
+      logger.info("Found existing customer:", customer.id);
+    }
+
+    // Create the checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customer.id,
+      payment_method_types: ["card"],
+      line_items: [{
+        price: priceId,
+        quantity: 1,
+      }],
+      mode: "payment",
+      payment_intent_data: {
+        setup_future_usage: 'off_session',
+        metadata: {
+          credits: creditTiers[priceId].credits,
+          userEmail: email
+        }
+      },
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?status=cancel`,
+      metadata: {
+        credits: creditTiers[priceId].credits,
+        userEmail: email
+      },
+      allow_promotion_codes: true,
+      billing_address_collection: "required",
+      submit_type: "pay"
+    });
+
+    logger.info("Checkout session created:", {
+      sessionId: session.id,
+      customerId: customer.id,
+      email: email
+    });
+
+    res.status(200).json({
+      url: session.url,
+      sessionId: session.id
+    });
+
   } catch (error) {
-    console.error("Error creating checkout session:", error);
-    res.status(500).send({ error: "Failed to create checkout session" });
+    logger.error("Error creating checkout session:", {
+      error: error.message,
+      stack: error.stack,
+      email: email,
+      priceId: priceId
+    });
+    res.status(500).send({ 
+      error: "Failed to create checkout session",
+      details: error.message
+    });
   }
 });
 
@@ -420,12 +562,16 @@ app.post("/get-purchase-history", async (req, res) => {
 app.post("/check-credits", async (req, res) => {
   const { email } = req.body;
 
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
   try {
     const credits = await getUserCredits(email);
-    res.status(200).send({ email, credits });
+    res.status(200).json({ email, credits });
   } catch (err) {
-    console.error("Error checking credits:", err.message);
-    res.status(500).send({ error: { message: "Internal server error" } });
+    logger.error("Error checking credits:", err);
+    res.status(500).json({ error: "Failed to fetch credits" });
   }
 });
 
@@ -579,7 +725,7 @@ app.post("/use-search", async (req, res) => {
     }
 
     // Step 7: Deduct user credits
-    await updateUserCredits(email, credits - creditCost);
+    await updateUserCreditsWithRetry(email, credits - creditCost);
 
     // Step 8: Log search history
     try {
@@ -865,7 +1011,8 @@ app.get("/auth/validate", (req, res) => {
   });
 });
 
-// Start server
+// Start the server
+const port = process.env.PORT || 5000;
 app.listen(port, () => {
-  logger.info(`Server running on port ${port}`);
+  logger.info(`Server is running on http://localhost:${port}`);
 });

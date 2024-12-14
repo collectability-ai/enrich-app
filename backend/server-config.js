@@ -34,9 +34,8 @@ const jwksClient = require("jwks-rsa");
 const app = express();
 
 // Constants
-const port = 5000;
 const region = "us-east-2";
-const USER_CREDITS_TABLE = "EnV_UserCredits";
+const USER_CREDITS_TABLE = "EnV_UserCredits"; // Make sure this matches exactly
 const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
 const CREDIT_COSTS = {
   validate: 2,
@@ -110,35 +109,61 @@ const verifyToken = (req, res, next) => {
 };
 
 // Utility Functions
+// In server-config.js, update these functions:
+
 async function getUserCredits(email) {
   if (!email) {
-    console.log("No email provided to getUserCredits");
+    logger.error("No email provided to getUserCredits");
     return 0;
   }
 
+  const params = {
+    TableName: USER_CREDITS_TABLE,
+    Key: { email: email }
+  };
+
   try {
-    const result = await dynamoDBDocClient.send(new GetCommand({
-      TableName: USER_CREDITS_TABLE,
-      Key: { userEmail: email }
-    }));
+    logger.info(`Fetching credits for user: ${email}`);
+    const result = await dynamoDBDocClient.send(new GetCommand(params));
+    logger.info(`Credits result for ${email}:`, result);  // Add this for debugging
     return result.Item ? result.Item.credits : 0;
   } catch (error) {
-    console.error("Error fetching user credits:", error);
-    return 0;
+    logger.error("Error fetching user credits:", {
+      error: error.message,
+      email: email,
+      tableName: USER_CREDITS_TABLE
+    });
+    throw error;
   }
 }
 
 async function updateUserCredits(email, credits) {
+  if (!email) {
+    logger.error("No email provided to updateUserCredits");
+    throw new Error("Email is required");
+  }
+
+  const params = {
+    TableName: USER_CREDITS_TABLE,
+    Key: { email: email },
+    UpdateExpression: "SET credits = :credits",
+    ExpressionAttributeValues: { ":credits": credits },
+    ReturnValues: "UPDATED_NEW"
+  };
+
   try {
-    await dynamoDBDocClient.send(new UpdateCommand({
-      TableName: USER_CREDITS_TABLE,
-      Key: { userEmail: email },
-      UpdateExpression: "SET credits = :credits",
-      ExpressionAttributeValues: { ":credits": credits },
-      ReturnValues: "UPDATED_NEW"
-    }));
+    logger.info(`Updating credits for user ${email} to ${credits}`);
+    logger.info(`Using table: ${USER_CREDITS_TABLE}`); // Debug log
+    const result = await dynamoDBDocClient.send(new UpdateCommand(params));
+    logger.info(`Successfully updated credits for ${email}:`, result);
+    return result;
   } catch (error) {
-    console.error("Error updating user credits:", error);
+    logger.error("Error updating user credits:", {
+      error: error.message,
+      email: email,
+      tableName: USER_CREDITS_TABLE,
+      credits: credits
+    });
     throw error;
   }
 }
@@ -198,7 +223,7 @@ async function signUpUser(userData) {
 // Export necessary items
 module.exports = {
   app,
-  port,
+  express,
   logger,
   verifyToken,
   stripe,
@@ -209,6 +234,7 @@ module.exports = {
   signUpUser,
   CREDIT_COSTS,
   dynamoDBDocClient,
+  USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
   cognitoClient,
   InitiateAuthCommand,

@@ -10,6 +10,7 @@ const SearchHistory = ({ userEmail, token }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isExporting, setIsExporting] = useState(false);
 
  useEffect(() => {
   let isMounted = true; // For cleanup
@@ -94,11 +95,13 @@ const SearchHistory = ({ userEmail, token }) => {
   };
 
   const exportToCSV = () => {
-    if (filteredHistory.length === 0) {
-      alert("No data to export.");
-      return;
-    }
+  if (filteredHistory.length === 0) {
+    alert("No data to export.");
+    return;
+  }
 
+  setIsExporting(true);
+  try {
     const csvContent = [
       [
         "Timestamp",
@@ -141,7 +144,10 @@ const SearchHistory = ({ userEmail, token }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  } finally {
+    setIsExporting(false);
+  }
+};
 
   // Pagination logic
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -150,231 +156,155 @@ const SearchHistory = ({ userEmail, token }) => {
   const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
 
   return (
-    <div>
-      <h2 style={{ textAlign: "center" }}>Search History</h2>
+    <div className="w-full">
+      <h2 className="text-xl font-semibold mb-6 text-center">Search History</h2>
 
-      <div style={{ marginBottom: "10px" }}>
-        <input
-          type="text"
-          placeholder="Search by EnVrequestID or Full Name"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ padding: "8px", width: "80%", marginRight: "10px" }}
-        />
-        <button
-          onClick={handleSearch}
-          style={{
-            padding: "10px",
-            backgroundColor: "#007BFF",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          Search
-        </button>
-      </div>
+      {/* Search and Export Controls */}
+      <div className="flex justify-between items-center mb-6">
+  <div className="flex items-center gap-2 flex-1">
+    <input
+      type="text"
+      placeholder="Search by EnVrequestID or Full Name"
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#67cad8] focus:border-transparent"
+    />
+    <button
+      onClick={handleSearch}
+      className="px-4 py-2 bg-[#67cad8] hover:bg-[#5ab5c2] text-white rounded-md transition-colors"
+    >
+      Search
+    </button>
+    <button
+      onClick={exportToCSV}
+      disabled={isExporting}
+      className="px-4 py-2 bg-[#2c5282] hover:bg-[#2a4365] text-white rounded-md transition-colors flex items-center gap-2"
+    >
+      {isExporting ? (
+        <>
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <span>Exporting...</span>
+        </>
+      ) : (
+        "Export to CSV"
+      )}
+    </button>
+  </div>
+</div>
 
-      <div style={{ textAlign: "right", marginBottom: "10px" }}>
-        <button
-          onClick={exportToCSV}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
+      {/* Items per page selector */}
+      <div className="mb-4 flex items-center">
+        <label htmlFor="itemsPerPage" className="mr-2">Items per page:</label>
+        <select
+          id="itemsPerPage"
+          value={itemsPerPage}
+          onChange={(e) => {
+            setItemsPerPage(Number(e.target.value));
+            setCurrentPage(1);
           }}
+          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#67cad8] focus:border-transparent"
         >
-          Export to CSV
-        </button>
+          <option value={10}>10</option>
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+          <option value={100}>100</option>
+        </select>
       </div>
 
       {loading ? (
-        <p>Loading search history...</p>
+        <p className="text-gray-500 text-center">Loading search history...</p>
       ) : error ? (
-        <p style={{ color: "red" }}>Error: {error}</p>
+        <p className="text-red-500 text-center">Error: {error}</p>
       ) : filteredHistory.length === 0 ? (
-        <p>No search history available.</p>
+        <p className="text-gray-500 text-center">No search history available.</p>
       ) : (
         <>
-          <div style={{ marginBottom: "10px" }}>
-            <label htmlFor="itemsPerPage">Items per page:</label>
-            <select
-              id="itemsPerPage"
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1); // Reset to first page
-              }}
-              style={{ marginLeft: "10px", padding: "5px" }}
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Timestamp</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">First Name</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Last Name</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Email</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Phone</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Address</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">City</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">State</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Zip</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 border border-gray-200">Request ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.map((entry) => (
+                  <tr
+                    key={entry.requestID}
+                    onClick={() => handleRowClick(entry.rawResponse)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="px-4 py-3 border border-gray-200">{new Date(entry.timestamp).toLocaleString()}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.firstName || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.lastName || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.email || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.phone || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.addressLine1 || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.city || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.state || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.searchQuery?.zip || "N/A"}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.status}</td>
+                    <td className="px-4 py-3 border border-gray-200">{entry.requestID}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              marginBottom: "20px",
-            }}
-          >
-            <thead>
-              <tr style={{ borderBottom: "1px solid #ddd", textAlign: "left" }}>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Timestamp</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>First Name</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Last Name</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Email</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Phone</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Address</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>City</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>State</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Zip</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Status</th>
-                <th style={{ padding: "10px", border: "1px solid #ddd" }}>Request ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedData.map((entry) => (
-                <tr
-                  key={entry.requestID}
-                  style={{
-                    borderBottom: "1px solid #ddd",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => handleRowClick(entry.rawResponse)}
-                >
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {new Date(entry.timestamp).toLocaleString()}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.firstName || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.lastName || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.email || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.phone || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.addressLine1 || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.city || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.state || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {entry.searchQuery?.zip || "N/A"}
-                  </td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>{entry.status}</td>
-                  <td style={{ padding: "10px", border: "1px solid #ddd" }}>{entry.requestID}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="mt-4 flex justify-between items-center">
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              style={{
-                padding: "10px",
-                backgroundColor: "#007BFF",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: currentPage === 1 ? "not-allowed" : "pointer",
-              }}
+              className={`px-4 py-2 rounded-md text-white transition-colors
+                ${currentPage === 1 
+                  ? "bg-gray-400 cursor-not-allowed" 
+                  : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
             >
               Previous
             </button>
-            <span>
+            <span className="text-gray-600">
               Page {currentPage} of {totalPages}
             </span>
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              style={{
-                padding: "10px",
-                backgroundColor: "#007BFF",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: currentPage === totalPages ? "not-allowed" : "pointer",
-              }}
+              className={`px-4 py-2 rounded-md text-white transition-colors
+                ${currentPage === totalPages 
+                  ? "bg-gray-400 cursor-not-allowed" 
+                  : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
             >
               Next
             </button>
           </div>
         </>
       )}
-      {rawResponse && (
+
+    {/* Raw Response Modal */}
+     {rawResponse && (
         <div
-          id="popup-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-          }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={handleClosePopup}
         >
           <div
-            style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "8px",
-              maxWidth: "80%",
-              maxHeight: "80%",
-              overflowY: "auto",
-              textAlign: "left",
-            }}
+            className="bg-white rounded-lg p-6 max-w-4xl max-h-[80vh] w-full mx-4 overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ textAlign: "center" }}>Raw Response</h3>
-            <pre
-              style={{
-                whiteSpace: "pre-wrap",
-                wordWrap: "break-word",
-                backgroundColor: "#f9f9f9",
-                padding: "10px",
-                borderRadius: "4px",
-              }}
-            >
+            <h3 className="text-xl font-semibold mb-4 text-center">Raw Response</h3>
+            <pre className="whitespace-pre-wrap bg-gray-50 p-4 rounded-md text-sm">
               {JSON.stringify(rawResponse, null, 2)}
             </pre>
             <button
               onClick={handleClosePopup}
-              style={{
-                marginTop: "10px",
-                display: "block",
-                marginLeft: "auto",
-                marginRight: "auto",
-                padding: "10px 20px",
-                backgroundColor: "#007BFF",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
+              className="mt-4 px-4 py-2 bg-[#67cad8] hover:bg-[#5ab5c2] text-white rounded-md transition-colors mx-auto block"
             >
               Close
             </button>
@@ -386,3 +316,4 @@ const SearchHistory = ({ userEmail, token }) => {
 };
 
 export default SearchHistory;
+

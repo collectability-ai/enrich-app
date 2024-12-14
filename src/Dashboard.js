@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import SearchHistory from "./SearchHistory";
 import { jwtDecode } from "jwt-decode";
+import SuccessModal from './SuccessModal';
 
 
-const Dashboard = ({ token }) => {
-  const [userEmail, setUserEmail] = useState(null); // Add this state
+const Dashboard = ({ token, email }) => {
+  const [userEmail, setUserEmail] = useState(null);
   console.log("Dashboard - userEmail:", userEmail); // Debug userEmail
   console.log("Dashboard - token:", token); // Debug token
   const [remainingCredits, setRemainingCredits] = useState(null);
@@ -20,33 +21,34 @@ const Dashboard = ({ token }) => {
   const [loadingHistory, setLoadingHistory] = useState(false); // For loading indicator
   const [historyError, setHistoryError] = useState(null); // To store error messages
   const [isExpanded, setIsExpanded] = useState(false); // To manage collapsible state
-
+  const [error, setError] = useState(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  
 useEffect(() => {
   if (token) {
     try {
       const decodedToken = jwtDecode(token);
       const email = decodedToken.email || decodedToken["cognito:username"];
       setUserEmail(email);
-      console.log("Dashboard - setting userEmail:", email); // Debug log
+      console.log("Dashboard - setting userEmail:", email);
     } catch (err) {
       console.error("Error decoding token:", err);
     }
   }
-}, [userEmail, token]); // Include both dependencies
+}, [token]); // Remove userEmail from dependencies
 
   // Fetch Remaining Credits
   useEffect(() => {
   let isMounted = true;
 
   const fetchCredits = async () => {
-    setLoadingCredits(true);
-    setCreditsError(null);
-    setRemainingCredits(null); // Clear credits immediately when effect runs
-
     if (!userEmail) {
-      console.log("No user email available for credits fetch");
+      console.log("No email available for credits fetch");
       return;
     }
+
+    setLoadingCredits(true);
+    setCreditsError(null);
 
     try {
       console.log("Fetching credits for user:", userEmail);
@@ -56,12 +58,14 @@ useEffect(() => {
         {
           headers: {
             Authorization: `Bearer ${token}`,
-          },
+            'Content-Type': 'application/json'
+          }
         }
       );
       
       if (isMounted) {
         setRemainingCredits(response.data.credits);
+        console.log("Credits fetched successfully:", response.data.credits);
       }
     } catch (err) {
       if (isMounted) {
@@ -77,11 +81,8 @@ useEffect(() => {
 
   fetchCredits();
 
-  // Cleanup function
   return () => {
     isMounted = false;
-    setRemainingCredits(null);
-    setCreditsError(null);
   };
 }, [userEmail, token]);
 
@@ -194,275 +195,253 @@ useEffect(() => {
 
  // Handle Quick Buy
 const handleQuickBuy = async () => {
-  if (!paymentMethods.length) {
-    alert("No payment methods found. Please add one.");
+  if (!paymentMethods || !paymentMethods.length) {
+    await handleStripeCheckout();
     return;
   }
 
   setProcessing(true);
   try {
-    const response = await axios.post("http://localhost:5000/purchase-pack", {
-      email: userEmail,
-      priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ", // 50 credits pack
-      paymentMethodId: paymentMethods[0].id, // Use the first payment method
-    });
+    const response = await axios.post(
+      "http://localhost:5000/purchase-pack",
+      {
+        email: userEmail,
+        priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ", // 50 credits pack
+        paymentMethodId: paymentMethods[0].id,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-    const data = response.data;
+    setRemainingCredits(response.data.remainingCredits);
+    setShowPopup(false);
+    setShowSuccessModal(true);
 
-    if (!response.status === 200) {
-      throw new Error(data.error?.message || "Purchase failed.");
-    }
-
-    // Update credits immediately after successful purchase
-    setRemainingCredits(data.remainingCredits);
-
-    alert("Purchase successful!");
   } catch (error) {
-    console.error("Error processing purchase:", error.message);
-    alert("Failed to complete purchase. Please try again.");
+    console.error("Error processing purchase:", error);
+    const errorMessage = error.response?.data?.error?.message;
+    
+    // Handle declined/expired cards
+    if (error.response?.data?.error?.code === 'card_declined' || 
+        errorMessage?.includes('declined') || 
+        errorMessage?.includes('expired')) {
+      setError("Your card was declined. Redirecting to checkout to update payment method.");
+      setShowPopup(false);
+      setTimeout(async () => {
+        await handleStripeCheckout();
+      }, 2000);
+    } else {
+      setError(errorMessage || "Failed to complete purchase. Please try again.");
+    }
   } finally {
     setProcessing(false);
-    setShowPopup(false); // Close popup
+  }
+};
+const handleStripeCheckout = async () => {
+  try {
+    console.log('Initiating Stripe checkout for:', userEmail);
+    const response = await axios.post(
+      "http://localhost:5000/create-checkout-session",
+      { 
+        email: userEmail,
+        priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ" // 50 credits pack
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    console.log('Checkout session created:', response.data);
+    
+    if (response.data.url) {
+      window.location.href = response.data.url;
+    } else {
+      throw new Error('No checkout URL received');
+    }
+  } catch (error) {
+    console.error("Error initiating checkout:", error);
+    if (error.response?.data?.details) {
+      console.error("Server error details:", error.response.data.details);
+    }
+    alert("Failed to initiate checkout. Please try again.");
   }
 };
 
-
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Dashboard</h2>
+    <div className="p-6 max-w-7xl mx-auto">
+      <h2 className="text-2xl font-bold text-center mb-8">Dashboard</h2>
 
-      {/* Top Row Boxes */}
-      <div
-        style={{
-          display: "flex",
-          gap: "20px",
-          marginBottom: "30px",
-        }}
-      >
-        {/* Remaining Credits Box */}
-        <div
-          style={{
-            flex: 1,
-            padding: "20px",
-            backgroundColor: "#e0e0e0",
-            color: "#333",
-            textAlign: "center",
-            borderRadius: "8px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            height: "150px",
-          }}
-        >
-          <h3>Remaining Credits</h3>
-          <p style={{ fontSize: "24px", fontWeight: "bold" }}>
-            {loadingCredits
-              ? "Loading..."
-              : creditsError
-              ? creditsError
-              : remainingCredits !== null
-              ? remainingCredits
-              : "N/A"}
-          </p>
+      {/* Top Row Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Credits Card */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Remaining Credits</h3>
+          <div className="min-h-[80px] flex items-center justify-center">
+            {loadingCredits ? (
+              <p className="text-gray-500">Loading...</p>
+            ) : creditsError ? (
+              <p className="text-red-600">{creditsError}</p>
+            ) : (
+              <p className="text-3xl font-bold text-gray-800">
+                {remainingCredits !== null ? remainingCredits : "N/A"}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Payment Methods Box */}
-        <div
-          style={{
-            flex: 1,
-            padding: "20px",
-            backgroundColor: "#e0e0e0",
-            color: "#333",
-            textAlign: "center",
-            borderRadius: "8px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            height: "150px",
-          }}
-        >
-          <h3>Payment Method</h3>
-          {loadingPayments ? (
-            <p>Loading...</p>
-          ) : paymentsError ? (
-            <p style={{ color: "red" }}>{paymentsError}</p>
-          ) : paymentMethods.length === 0 ? (
-            <p>No payment methods available.</p>
-          ) : (
-            <p>
-              {paymentMethods[0].brand} ending in {paymentMethods[0].last4}{" "}
-              (Expires {paymentMethods[0].exp_month}/{paymentMethods[0].exp_year})
-            </p>
-          )}
+        {/* Payment Method Card */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Payment Method</h3>
+          <div className="min-h-[80px] flex items-center justify-center">
+            {loadingPayments ? (
+              <p className="text-gray-500">Loading...</p>
+            ) : paymentsError ? (
+              <p className="text-red-600">{paymentsError}</p>
+            ) : !paymentMethods || paymentMethods.length === 0 ? (
+              <p className="text-gray-500">No payment methods available.</p>
+            ) : !paymentMethods[0]?.brand || !paymentMethods[0]?.last4 ? (
+              <p className="text-gray-500">Payment method information unavailable</p>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-800 font-medium">
+                  {paymentMethods[0].brand} •••• {paymentMethods[0].last4}
+                </p>
+                {paymentMethods[0].exp_month && paymentMethods[0].exp_year && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Expires {paymentMethods[0].exp_month}/{paymentMethods[0].exp_year}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Quick Buy Box */}
-        <div
-          style={{
-            flex: 1,
-            padding: "20px",
-            backgroundColor: "#e0e0e0",
-            color: "#333",
-            textAlign: "center",
-            borderRadius: "8px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            height: "150px",
-          }}
-        >
-          <h3>Quick Buy 50 Credits</h3>
-          <button
-            onClick={() => setShowPopup(true)} // Open popup
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "16px",
-            }}
-            disabled={processing}
-          >
-            Purchase
-          </button>
+        {/* Quick Buy Card */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Quick Buy 50 Credits</h3>
+          <div className="min-h-[80px] flex items-center justify-center">
+            <button
+              onClick={() => {
+                if (paymentMethods?.length > 0) {
+                  setShowPopup(true);
+                } else {
+                  handleStripeCheckout();
+                }
+              }}
+              disabled={processing}
+              className={`px-6 py-3 rounded-md text-white font-medium transition-colors
+                ${processing 
+                  ? "bg-gray-400 cursor-not-allowed" 
+                  : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
+            >
+              {processing ? "Processing..." : "Purchase"}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Confirmation Popup */}
-      {showPopup && (
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            backgroundColor: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.2)",
-            zIndex: 1000,
-          }}
-        >
-          <p>
-            You are about to purchase <strong>50 credits</strong> using{" "}
-            <strong>
-              {paymentMethods[0].brand} ending in {paymentMethods[0].last4}
-            </strong>
-            . Do you want to proceed?
-          </p>
-          <button
-            onClick={handleQuickBuy}
-            style={{
-              padding: "10px 20px",
-              marginRight: "10px",
-              backgroundColor: "#28a745",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-            disabled={processing}
-          >
-            {processing ? "Processing..." : "Confirm"}
-          </button>
-          <button
-            onClick={() => setShowPopup(false)} // Close popup
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-  {/* Purchase History Section */}
-<div
-  style={{
-    marginTop: "30px",
-    padding: "20px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-  }}
->
-  <h3 style={{ textAlign: "center", marginBottom: "10px" }}>Purchase History</h3>
-
-  {loadingHistory ? (
-    <p>Loading purchase history...</p>
-  ) : historyError ? (
-    <p style={{ color: "red" }}>{historyError}</p>
-  ) : purchaseHistory.length === 0 ? (
-    <p>No purchase history available.</p>
-  ) : (
-    <table
-      style={{
-        width: "100%",
-        borderCollapse: "collapse",
-        marginBottom: "10px",
-      }}
-    >
-      <thead>
-        <tr style={{ backgroundColor: "#f2f2f2" }}>
-          <th style={{ textAlign: "left", padding: "10px", borderBottom: "1px solid #ddd" }}>
-            Date
-          </th>
-          <th style={{ textAlign: "left", padding: "10px", borderBottom: "1px solid #ddd" }}>
-            Amount
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {(isExpanded ? purchaseHistory : purchaseHistory.slice(0, 3)).map(
-          (purchase, index) => (
-            <tr key={index}>
-              <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
-                {purchase.date}
-              </td>
-              <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
-                {purchase.amount}
-              </td>
-            </tr>
-          )
+      {/* Purchase History Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-700 mb-4">Purchase History</h3>
+        
+        {loadingHistory ? (
+          <p className="text-gray-500">Loading purchase history...</p>
+        ) : historyError ? (
+          <p className="text-red-600">{historyError}</p>
+        ) : purchaseHistory.length === 0 ? (
+          <p className="text-gray-500">No purchase history available.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Date</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-500">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {(isExpanded ? purchaseHistory : purchaseHistory.slice(0, 3)).map((purchase, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-700">{purchase.date}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{purchase.amount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </tbody>
-    </table>
-  )}
 
-  {purchaseHistory.length > 3 && (
-    <div style={{ textAlign: "right" }}>
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          padding: "8px 16px",
-          backgroundColor: isExpanded ? "#dc3545" : "#007bff",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "14px",
-        }}
-      >
-        {isExpanded ? "Collapse" : "Expand All"}
-      </button>
+        {purchaseHistory.length > 3 && (
+          <div className="mt-4 text-right">
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className={`px-4 py-2 rounded-md text-white font-medium text-sm
+                ${isExpanded 
+                  ? "bg-red-500 hover:bg-red-600" 
+                  : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
+            >
+              {isExpanded ? "Collapse" : "Expand All"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Search History Section */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        {userEmail && <SearchHistory userEmail={userEmail} token={token} />}
+      </div>
+
+     {/* Confirmation Modal */}
+{showPopup && paymentMethods && paymentMethods[0] && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+      <h3 className="text-xl font-semibold mb-4">Confirm Purchase</h3>
+      <p className="text-gray-600 mb-6">
+        You are about to purchase <span className="font-medium text-gray-800">50 credits for $19.97</span>
+        <br />
+        using <span className="font-medium text-gray-800">{paymentMethods[0].brand} •••• {paymentMethods[0].last4}</span>
+      </p>
+      <div className="flex gap-3">
+        <button
+          onClick={handleQuickBuy}
+          disabled={processing}
+          className={`flex-1 px-4 py-2 rounded-md text-white font-medium transition-colors inline-flex items-center justify-center gap-2 
+            ${processing 
+              ? "bg-gray-400 cursor-not-allowed" 
+              : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
+        >
+          {processing ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Processing...</span>
+            </>
+          ) : (
+            "Confirm"
+          )}
+        </button>
+        <button
+          onClick={() => setShowPopup(false)}
+          disabled={processing}
+          className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
+        >
+          Cancel
+       </button>
+      </div>
     </div>
-  )}
-</div>
+  </div>
+)}
 
-
-     {/* Search History Section */}
-<div
-  style={{
-    marginTop: "30px",
-    padding: "20px",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-  }}
->
-  {userEmail && <SearchHistory userEmail={userEmail} token={token} />}
-</div>
+{/* Success Modal */}
+<SuccessModal 
+  isOpen={showSuccessModal} 
+  onClose={() => setShowSuccessModal(false)} 
+/>
     </div>
   );
 };

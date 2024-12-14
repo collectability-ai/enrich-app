@@ -6,47 +6,71 @@ const CheckoutForm = ({ userEmail, token }) => {
   console.log("Received token in CheckoutForm:", token);
 
   const [priceId, setPriceId] = useState("price_1QOv9IAUGHTClvwyzELdaAiQ"); // Default 50-pack
-  const [paymentMethodId, setPaymentMethodId] = useState(""); // Selected payment method ID
-  const [paymentMethods, setPaymentMethods] = useState([]); // List of available payment methods
+  const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
-  const fetchPaymentMethods = async () => {
-    if (!userEmail || !token) {
-      console.error("User email or token is missing. Please sign in again.");
-      return;
-    }
-
-    console.log("Fetching payment methods for userEmail:", userEmail);
-    console.log("Using token:", token);
-
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/get-payment-methods",
-        { email: userEmail }, // Request body
-        {
-          headers: {
-            Authorization: `Bearer ${token}`, // Token in the headers
-          },
-        }
-      );
-      console.log("API Response:", response.data);
-
-      // Handle response (update payment methods in state)
-      setPaymentMethods(response.data.paymentMethods || []);
-      if (response.data.paymentMethods?.length > 0) {
-        setPaymentMethodId(response.data.paymentMethods[0].id); // Default payment method
+    const fetchPaymentMethods = async () => {
+      if (!userEmail || !token) {
+        console.error("User email or token is missing. Please sign in again.");
+        return;
       }
-    } catch (error) {
-      console.error("Error fetching payment methods:", error.response?.data || error.message);
+
+      try {
+        const response = await axios.post(
+          "http://localhost:5000/get-payment-methods",
+          { email: userEmail },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        setPaymentMethods(response.data.paymentMethods || []);
+        if (response.data.paymentMethods?.length > 0) {
+          setPaymentMethodId(response.data.paymentMethods[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching payment methods:", error);
+        setErrorMessage("Failed to load payment methods. Please refresh the page.");
+      }
+    };
+
+    fetchPaymentMethods();
+  }, [userEmail, token]);
+
+  // Function to verify credits were added
+  const verifyCredits = async (initialCredits, maxAttempts = 3) => {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        const response = await axios.post(
+          "http://localhost:5000/check-credits",
+          { email: userEmail },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        if (response.data.credits > initialCredits) {
+          return true;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
+        attempts++;
+      } catch (error) {
+        console.error("Error verifying credits:", error);
+      }
     }
+    return false;
   };
-
-  fetchPaymentMethods();
-}, [userEmail, token]);
-
 
   const handlePurchase = async () => {
     if (!paymentMethodId) {
@@ -59,6 +83,19 @@ const CheckoutForm = ({ userEmail, token }) => {
     setSuccessMessage("");
 
     try {
+      // Get initial credit balance
+      const initialCreditsResponse = await axios.post(
+        "http://localhost:5000/check-credits",
+        { email: userEmail },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const initialCredits = initialCreditsResponse.data.credits || 0;
+
+      // Process purchase
       const response = await axios.post(
         "http://localhost:5000/purchase-pack",
         {
@@ -73,21 +110,53 @@ const CheckoutForm = ({ userEmail, token }) => {
         }
       );
 
-      setSuccessMessage(
-        `Pack purchased successfully! Remaining credits: ${response.data.remainingCredits}`
-      );
+      // Handle case where payment processed but verification is needed
+      if (response.data.requiresVerification) {
+        setVerifying(true);
+        setSuccessMessage("Payment processed. Verifying credit update...");
+        
+        const verified = await verifyCredits(initialCredits);
+        if (!verified) {
+          setSuccessMessage(
+            "Payment successful! Credits may take a few minutes to appear. " +
+            "Please refresh the page in a few minutes."
+          );
+        } else {
+          setSuccessMessage(
+            `Purchase successful! Your new balance is ${response.data.remainingCredits} credits.`
+          );
+        }
+      } else {
+        setSuccessMessage(
+          `Purchase successful! You now have ${response.data.remainingCredits} credits.`
+        );
+      }
+
     } catch (error) {
-      const message = error.response?.data?.error?.message || "An error occurred during purchase.";
-      setErrorMessage(message);
+      console.error("Purchase error:", error);
+      
+      // Handle specific error cases
+      if (error.response?.data?.error?.requiresSupport) {
+        setErrorMessage(
+          "Your payment was processed but there was a delay adding credits. " +
+          "Our support team has been notified and will resolve this shortly."
+        );
+      } else if (error.response?.data?.error?.code === 'card_declined') {
+        setErrorMessage("Your card was declined. Please try a different payment method.");
+      } else {
+        setErrorMessage(error.response?.data?.error?.message || "An error occurred during purchase.");
+      }
     } finally {
       setLoading(false);
+      setVerifying(false);
     }
   };
 
   return (
     <div>
       <h2>Purchase Credits</h2>
-      {loading && <p>Loading...</p>}
+      {loading && <p>Processing your purchase...</p>}
+      {verifying && <p>Verifying credit update...</p>}
       {errorMessage && <p style={{ color: "red" }}>{errorMessage}</p>}
       {successMessage && <p style={{ color: "green" }}>{successMessage}</p>}
 
@@ -97,8 +166,8 @@ const CheckoutForm = ({ userEmail, token }) => {
         value={priceId}
         onChange={(e) => setPriceId(e.target.value)}
         style={{ marginBottom: "15px", display: "block" }}
+        disabled={loading || verifying}
       >
-        {/* Package options */}
         <option value="price_1QOubIAUGHTClvwyCb4r0ffE">3 credits ($2.00)</option>
         <option value="price_1QOv9IAUGHTClvwyRj2ChIb3">10 credits ($5.97)</option>
         <option value="price_1QOv9IAUGHTClvwyzELdaAiQ">50 credits ($19.97)</option>
@@ -114,6 +183,7 @@ const CheckoutForm = ({ userEmail, token }) => {
         value={paymentMethodId}
         onChange={(e) => setPaymentMethodId(e.target.value)}
         style={{ marginBottom: "15px", display: "block" }}
+        disabled={loading || verifying}
       >
         <option value="">-- Select Payment Method --</option>
         {paymentMethods.map((method) => (
@@ -124,8 +194,11 @@ const CheckoutForm = ({ userEmail, token }) => {
         ))}
       </select>
 
-      <button onClick={handlePurchase} disabled={loading}>
-        Purchase
+      <button 
+        onClick={handlePurchase} 
+        disabled={loading || verifying || !paymentMethodId}
+      >
+        {loading || verifying ? "Processing..." : "Purchase"}
       </button>
     </div>
   );

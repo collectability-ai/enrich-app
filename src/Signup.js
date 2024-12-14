@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { signUp } from 'aws-amplify/auth';
 import { useNavigate } from "react-router-dom";
+import { AlertCircle } from "lucide-react";
 
 const Signup = () => {
   const navigate = useNavigate();
+  const [focusedField, setFocusedField] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -49,7 +51,6 @@ const Signup = () => {
     setError(null);
 
     try {
-      // Format phone number to include country code if not present
       const formattedPhone = formData.phone.startsWith('+') 
         ? formData.phone 
         : `+1${formData.phone.replace(/\D/g, '')}`;
@@ -76,10 +77,8 @@ const Signup = () => {
       setSuccess(true);
       alert("Signup successful! Please check your email for verification code.");
       
-      // Store email temporarily for verification
       sessionStorage.setItem('pendingVerificationEmail', formData.email);
       
-      // Navigate to verification page (you'll need to create this)
       setTimeout(() => {
         navigate("/verify");
       }, 2000);
@@ -93,225 +92,247 @@ const Signup = () => {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100vh",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          width: "600px",
-          backgroundColor: "white",
-          borderRadius: "8px",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-          padding: "20px",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <img
-            src="/logo.png"
-            alt="Logo"
-            style={{ maxWidth: "100%", height: "auto" }}
-          />
-        </div>
-        <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Sign Up</h2>
-        {error && <p style={{ color: "red", textAlign: "center" }}>{error}</p>}
-        {success && (
-          <p style={{ color: "green", textAlign: "center" }}>
-            Signup successful! Redirecting to verification...
-          </p>
-        )}
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Name</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
+    <div className="w-full flex justify-center pt-8">
+      <div className="w-[600px] rounded-lg overflow-hidden shadow-lg bg-white">
+        <div className="pb-4 px-6 pt-6">
+          <div className="text-center mb-6">
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="h-12 mx-auto mb-4"
             />
+            <h2 className="text-2xl font-bold">Sign Up</h2>
           </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Email Address</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Phone Number</label>
-            <input
-              type="text"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              required
-              placeholder="+1234567890"
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Company Name</label>
-            <input
-              type="text"
-              name="companyName"
-              value={formData.companyName}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Company Website</label>
-            <input
-              type="text"
-              name="companyWebsite"
-              value={formData.companyWebsite}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Company EIN (Optional)</label>
-            <input
-              type="text"
-              name="companyEIN"
-              value={formData.companyEIN}
-              onChange={handleChange}
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            />
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>Use Case</label>
-            <select
-              name="useCase"
-              value={formData.useCase}
-              onChange={handleChange}
-              required
-              style={{
-                width: "100%",
-                padding: "10px",
-                margin: "5px 0",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-              }}
-            >
-              <option value="">Select Use Case</option>
-              <option value="Debt Collections">Debt Collections</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Real Estate">Real Estate</option>
-            </select>
-          </div>
-          <div style={{ marginBottom: "15px" }}>
-            <label>
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {success && (
+            <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-md">
+              Signup successful! Redirecting to verification...
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("name")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "name" || formData.name ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Name
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("email")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "email" || formData.email ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Email Address
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("phone")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "phone" || formData.phone ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Phone Number
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("password")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "password" || formData.password ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Password
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                name="companyName"
+                value={formData.companyName}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("companyName")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "companyName" || formData.companyName ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Company Name
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                name="companyWebsite"
+                value={formData.companyWebsite}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("companyWebsite")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "companyWebsite" || formData.companyWebsite ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Company Website
+              </label>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                name="companyEIN"
+                value={formData.companyEIN}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("companyEIN")}
+                onBlur={() => setFocusedField("")}
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder=" "
+              />
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 peer-placeholder-shown:translate-y-3 
+                  peer-focus:-translate-y-3 peer-focus:text-blue-600 bg-white px-1
+                  ${focusedField === "companyEIN" || formData.companyEIN ? 'text-blue-600 -translate-y-3' : 'text-gray-500'}`}
+              >
+                Company EIN (Optional)
+              </label>
+            </div>
+
+            <div className="relative">
+              <select
+                name="useCase"
+                value={formData.useCase}
+                onChange={handleChange}
+                onFocus={() => setFocusedField("useCase")}
+                onBlur={() => setFocusedField("")}
+                required
+                className="w-full px-3 py-3 bg-white border rounded-md peer outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                placeholder=" "
+              >
+                <option value="">Select Use Case</option>
+                <option value="Debt Collections">Debt Collections</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Real Estate">Real Estate</option>
+                <option value="Fraud Prevention">Fraud Prevention</option>
+                <option value="Identity Verification">Identity Verification</option>
+              </select>
+              <label
+                className={`absolute text-sm duration-150 transform -translate-y-3 top-0.5 left-3 bg-white px-1
+                  ${focusedField === "useCase" || formData.useCase ? 'text-blue-600' : 'text-gray-500'}
+                  after:content-["*"] after:ml-0.5 after:text-red-500`}
+              >
+                Use Case
+              </label>
+            </div>
+
+            <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
                 name="termsAccepted"
                 checked={formData.termsAccepted}
                 onChange={handleChange}
-                style={{ marginRight: "10px" }}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              I accept the Terms and Conditions
-            </label>
-          </div>
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "10px",
-              backgroundColor: isLoading ? "#ccc" : "#67cad8",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: isLoading ? "not-allowed" : "pointer",
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? "Signing Up..." : "Sign Up"}
-          </button>
-        </form>
-      </div>
+              <label className="text-sm text-gray-700">
+                I accept the Terms and Conditions
+              </label>
+            </div>
 
-      <div style={{ textAlign: "center", marginTop: "20px" }}>
-        <p>Already a user?</p>
-        <button
-          onClick={() => navigate("/login")}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#67cad8",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          Sign In
-        </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-3 px-4 rounded-md text-white font-medium
+                ${isLoading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#67cad8] hover:bg-[#5ab5c2] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#67cad8]"
+                }`}
+            >
+              {isLoading ? "Signing Up..." : "Sign Up"}
+            </button>
+          </form>
+        </div>
+
+        <div className="text-center mt-6 mb-6">
+          <p className="text-sm text-gray-600 mb-2">Already a user?</p>
+          <button
+            onClick={() => navigate("/login")}
+            className="text-[#67cad8] hover:text-[#5ab5c2] font-medium"
+          >
+            Sign In
+          </button>
+        </div>
       </div>
     </div>
   );
