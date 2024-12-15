@@ -179,11 +179,14 @@ const PaymentMethods = ({ userEmail }) => {
                   </span>
                 )}
                 <button
-                  onClick={() => handleDelete(method.id)}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors text-sm"
-                >
-                  Remove
-                </button>
+  onClick={() => handleDelete(method.id, {    // NEW VERSION
+    brand: method.brand,
+    last4: method.last4
+  })}
+  className="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+>
+  Remove
+</button>
               </div>
             </div>
           ))}

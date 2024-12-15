@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from "react";
+import { X, Check, Loader } from 'lucide-react';
 
 const PurchaseCredits = ({ userEmail, token }) => {
   const [remainingCredits, setRemainingCredits] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPack, setSelectedPack] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(null);
   
   const creditPacks = [
     { credits: 3, price: 2.0, priceId: "price_1QOubIAUGHTClvwyCb4r0ffE", type: "basic" },
@@ -12,6 +18,51 @@ const PurchaseCredits = ({ userEmail, token }) => {
     { credits: 1000, price: 199.97, priceId: "price_1QOv9IAUGHTClvwyBH9Jh7ir", type: "premium" },
     { credits: 1750, price: 279.97, priceId: "price_1QOv9IAUGHTClvwykbXsElbr", type: "premium" }
   ];
+
+  const Modal = ({ children, isOpen, onClose }) => {
+    if (!isOpen) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          padding: '24px',
+          maxWidth: '500px',
+          width: '90%',
+          position: 'relative',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              right: '16px',
+              top: '16px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#6b7280'
+            }}
+          >
+            <X size={20} />
+          </button>
+          {children}
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     const fetchCredits = async () => {
@@ -35,8 +86,8 @@ const PurchaseCredits = ({ userEmail, token }) => {
     fetchCredits();
   }, [userEmail, token]);
 
-  // Preserve existing handleBuyPack function exactly as is
   const handleBuyPack = async (pack) => {
+    setSelectedPack(pack);
     try {
       console.log("Token sent:", token);
 
@@ -56,34 +107,8 @@ const PurchaseCredits = ({ userEmail, token }) => {
       const data = await response.json();
 
       if (data.paymentMethods && data.paymentMethods.length > 0) {
-        const paymentMethod = data.paymentMethods[0];
-        const confirmPurchase = window.confirm(
-          `You are about to purchase ${pack.credits} credits for $${pack.price} using your ${paymentMethod.brand} card ending in ${paymentMethod.last4}. Do you want to proceed?`
-        );
-
-        if (confirmPurchase) {
-          const purchaseResponse = await fetch(`${process.env.REACT_APP_API_URL}/purchase-pack`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email: userEmail,
-              priceId: pack.priceId,
-              paymentMethodId: paymentMethod.id,
-            }),
-          });
-
-          if (!purchaseResponse.ok) {
-            throw new Error("Failed to process the purchase.");
-          }
-
-          const purchaseData = await purchaseResponse.json();
-          alert(`Purchase successful! Remaining Credits: ${purchaseData.remainingCredits}`);
-          
-          // Update displayed credits after successful purchase
-          setRemainingCredits(purchaseData.remainingCredits);
-        }
+        setPaymentMethod(data.paymentMethods[0]);
+        setShowConfirmModal(true);
       } else {
         console.log("No payment methods found, creating Stripe Checkout session...");
         const checkoutResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-checkout-session`, {
@@ -102,12 +127,42 @@ const PurchaseCredits = ({ userEmail, token }) => {
         }
 
         const checkoutData = await checkoutResponse.json();
-        console.log("Redirecting to Stripe Checkout:", checkoutData.url);
         window.location.href = checkoutData.url;
       }
     } catch (error) {
       console.error("Error processing purchase:", error);
       alert("An error occurred. Please try again.");
+    }
+  };
+
+  const handleConfirmPurchase = async () => {
+    setIsProcessing(true);
+    try {
+      const purchaseResponse = await fetch(`${process.env.REACT_APP_API_URL}/purchase-pack`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          priceId: selectedPack.priceId,
+          paymentMethodId: paymentMethod.id,
+        }),
+      });
+
+      if (!purchaseResponse.ok) {
+        throw new Error("Failed to process the purchase.");
+      }
+
+      const purchaseData = await purchaseResponse.json();
+      setRemainingCredits(purchaseData.remainingCredits);
+      setShowConfirmModal(false);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error processing purchase:", error);
+      alert("An error occurred. Please try again.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -319,6 +374,98 @@ const PurchaseCredits = ({ userEmail, token }) => {
           );
         })}
       </div>
+      {/* Confirmation Modal */}
+      <Modal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)}>
+        <div style={{ textAlign: 'center' }}>
+          <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '16px' }}>Confirm Purchase</h3>
+          {selectedPack && paymentMethod && (
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ marginBottom: '16px' }}>
+                You are about to purchase {selectedPack.credits} credits for ${selectedPack.price.toFixed(2)} using your {paymentMethod.brand} card ending in {paymentMethod.last4}.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#e5e7eb',
+                    color: '#374151',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 500
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmPurchase}
+                  disabled={isProcessing}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: isProcessing ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: isProcessing ? 0.7 : 1
+                  }}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
+                      Processing...
+                    </>
+                  ) : (
+                    'Confirm Purchase'
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ 
+              backgroundColor: '#dcfce7', 
+              borderRadius: '50%', 
+              padding: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Check size={32} style={{ color: '#16a34a' }} />
+            </div>
+          </div>
+          <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>Purchase Successful!</h3>
+          <p style={{ marginBottom: '16px' }}>Your credits have been added to your account.</p>
+          <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px' }}>
+            Remaining Credits: {remainingCredits}
+          </p>
+          <button
+            onClick={() => setShowSuccessModal(false)}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 };

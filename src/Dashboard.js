@@ -508,22 +508,22 @@ const handleDelete = (paymentMethodId, cardInfo) => {
        onClose={() => setShowSuccessModal(false)} 
      />
 
-     {/* Delete Confirmation Modal */}
+    {/* Delete Confirmation Modal */}
 {showDeleteConfirm.show && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
-      <h3 className="text-xl font-semibold mb-4">Confirm Removal</h3>
-      <p className="text-gray-600 mb-6">
+      <h3 className="text-xl font-semibold mb-4">Remove Payment Method</h3>
+      <p className="text-gray-600">
         Are you sure you want to remove this card?
         {showDeleteConfirm.cardInfo && (
-          <span className="block mt-2 font-medium">
+          <span className="block mt-2 font-medium text-gray-800">
             {showDeleteConfirm.cardInfo.brand} •••• {showDeleteConfirm.cardInfo.last4}
           </span>
         )}
       </p>
-      <div className="flex gap-3">
+      <div className="flex gap-3 mt-6">
         <button
-          onClick={async () => {  // Add async here
+          onClick={async () => {
             try {
               await axios.post(
                 "http://localhost:5000/delete-payment-method",
@@ -551,7 +551,7 @@ const handleDelete = (paymentMethodId, cardInfo) => {
               setShowDeleteConfirm({ show: false, paymentMethodId: null, cardInfo: null });
             }
           }}
-          className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md font-medium transition-colors"
+          className="flex-1 px-4 py-2 bg-[#67cad8] hover:bg-[#5ab5c2] text-white rounded-md font-medium transition-colors"
         >
           Remove
         </button>

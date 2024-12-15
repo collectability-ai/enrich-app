@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning
 
 # Set version number and description
-$version = "v1.2.8"
-$description = Remove Payment Method bug fix
+$version = "v1.2.9"
+$description = Updated all confirmation popup modals to match theme.
 
 # Add all changes
 git add .
