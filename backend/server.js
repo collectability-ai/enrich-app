@@ -156,7 +156,7 @@ async function validatePurchaseRequest(email, priceId, paymentMethodId) {
 
 async function signUpUser(userData) {
   const params = {
-    ClientId: "64iqduh82e6tvd5orlkn7rktc8",
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
     Username: userData.email,
     Password: userData.password,
     UserAttributes: [
@@ -850,16 +850,16 @@ app.post("/use-search", async (req, res) => {
       },
     });
 
-    // Initialize the SignatureV4 signer with the SHA-256 hash constructor
-    const signer = new SignatureV4({
-      service: "execute-api",
-      region: "us-east-2",
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      },
-      sha256: Sha256, // Explicit SHA-256 hash implementation
-    });
+   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
+const signer = new SignatureV4({
+  service: "execute-api",
+  region: process.env.AWS_REGION, // Dynamic region from environment variables
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Dynamically loaded from environment
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Dynamically loaded from environment
+  },
+  sha256: Sha256, // Explicit SHA-256 hash implementation
+});
 
     const signedRequest = await signer.sign(request);
 
@@ -978,7 +978,7 @@ app.post("/get-search-history", async (req, res) => {
 // Utility function to sign up a user in Cognito
 async function signUpUser(userData) {
   const params = {
-    ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Cognito App Client ID
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
     Username: userData.email,
     Password: userData.password, // User-provided password
     UserAttributes: [
@@ -1076,7 +1076,7 @@ app.post("/login", async (req, res) => {
     // Parameters for Cognito login
     const params = {
       AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Replace with your Cognito App Client ID
+      ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,

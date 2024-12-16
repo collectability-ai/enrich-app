@@ -80,10 +80,13 @@ const OPERATION_LABELS = {
     };
 
     try {
-      const response = await axios.post("http://localhost:5000/use-search", {
-        email: userEmail,
-        searchQuery: formattedQuery
-      });
+      const response = await axios.post(
+  `${process.env.REACT_APP_API_BASE_URL}/use-search`,
+  {
+    email: userEmail,
+    searchQuery: formattedQuery,
+  }
+);
 
       if (response.data?.data) {
         setResponseData(response.data.data);

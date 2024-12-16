@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Loader } from 'lucide-react';
 
+console.log("API Base URL:", process.env.REACT_APP_API_BASE_URL);
+
 const PurchaseCredits = ({ userEmail, token }) => {
   const [remainingCredits, setRemainingCredits] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -67,7 +69,10 @@ const PurchaseCredits = ({ userEmail, token }) => {
   useEffect(() => {
     const fetchCredits = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/check-credits`, {
+ // Log the constructed URL
+        console.log("Calling URL:", `${process.env.REACT_APP_API_BASE_URL}/check-credits`);
+
+        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/check-credits`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -91,7 +96,7 @@ const PurchaseCredits = ({ userEmail, token }) => {
     try {
       console.log("Token sent:", token);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/get-payment-methods`, {
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -111,7 +116,7 @@ const PurchaseCredits = ({ userEmail, token }) => {
         setShowConfirmModal(true);
       } else {
         console.log("No payment methods found, creating Stripe Checkout session...");
-        const checkoutResponse = await fetch(`${process.env.REACT_APP_API_URL}/create-checkout-session`, {
+        const checkoutResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -138,7 +143,7 @@ const PurchaseCredits = ({ userEmail, token }) => {
   const handleConfirmPurchase = async () => {
     setIsProcessing(true);
     try {
-      const purchaseResponse = await fetch(`${process.env.REACT_APP_API_URL}/purchase-pack`, {
+      const purchaseResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/purchase-pack`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

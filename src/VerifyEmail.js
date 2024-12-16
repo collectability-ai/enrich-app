@@ -14,14 +14,14 @@ const VerifyEmail = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get email from session storage
-    const storedEmail = sessionStorage.getItem('pendingVerificationEmail');
-    if (!storedEmail) {
-      navigate('/signup');
-      return;
-    }
-    setEmail(storedEmail);
-  }, [navigate]);
+  // Get email from session storage
+  const storedEmail = sessionStorage.getItem(process.env.REACT_APP_SESSION_EMAIL_KEY || 'pendingVerificationEmail');
+  if (!storedEmail) {
+    navigate('/signup');
+    return;
+  }
+  setEmail(storedEmail);
+}, [navigate]);
 
   useEffect(() => {
     // Countdown timer for resend button
@@ -45,7 +45,7 @@ const VerifyEmail = () => {
       });
 
       setSuccess(true);
-      sessionStorage.removeItem('pendingVerificationEmail');
+      sessionStorage.removeItem(process.env.REACT_APP_SESSION_EMAIL_KEY || 'pendingVerificationEmail');
       
       // Show success message and redirect to login
       alert("Email verified successfully! Please log in.");

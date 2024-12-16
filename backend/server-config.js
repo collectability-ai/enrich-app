@@ -1,13 +1,25 @@
-// Load environment variables
+// Load environment variables first
 require("dotenv").config();
+
+// Verify Stripe key is loaded
+const stripeKey = process.env.NODE_ENV === "production"
+  ? process.env.STRIPE_LIVE_SECRET_KEY
+  : process.env.STRIPE_TEST_SECRET_KEY;
+
+if (!stripeKey) {
+  throw new Error('Stripe API key is missing. Please check your environment variables.');
+}
 
 // Core dependencies
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
-const stripe = require("stripe")(process.env.STRIPE_TEST_SECRET_KEY);
+const stripe = require("stripe")(stripeKey);
 const winston = require("winston");
 const cors = require("cors");
+
+// Debug log to verify environment
+console.log("Environment:", process.env.NODE_ENV || 'development');
 
 // AWS SDK imports
 const { CognitoIdentityProviderClient } = require("@aws-sdk/client-cognito-identity-provider");
@@ -34,7 +46,8 @@ const jwksClient = require("jwks-rsa");
 const app = express();
 
 // Constants
-const region = "us-east-2";
+const region = process.env.AWS_REGION || "us-east-2";
+console.log("Using AWS Region:", region); // Temporary log for verification
 const USER_CREDITS_TABLE = "EnV_UserCredits"; // Make sure this matches exactly
 const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
 const CREDIT_COSTS = {
@@ -61,7 +74,7 @@ const signer = new SignatureV4({
 
 // Configure JWKS client
 const client = jwksClient({
-  jwksUri: "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_EHz7xWNbm/.well-known/jwks.json",
+  jwksUri: `https://cognito-idp.${region}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
 });
 
 // Initialize Winston logger
@@ -198,8 +211,8 @@ async function logSearchHistory(email, searchQuery, requestID, status, rawRespon
 
 async function signUpUser(userData) {
   const params = {
-    ClientId: "64iqduh82e6tvd5orlkn7rktc8",
-    Username: userData.email,
+  ClientId: process.env.COGNITO_CLIENT_ID, // Environment variable
+  Username: userData.email,
     Password: userData.password,
     UserAttributes: [
       { Name: "email", Value: userData.email },

@@ -24,57 +24,77 @@ const Dashboard = ({ token, email }) => {
   const [error, setError] = useState(null);
 
   // Token decoding effect
-  useEffect(() => {
-    if (token) {
-      try {
-        const decodedToken = jwtDecode(token);
-        const email = decodedToken.email || decodedToken["cognito:username"];
+useEffect(() => {
+  if (token) {
+    console.log("Token being used:", token); // Log the token being used
+    try {
+      const decodedToken = jwtDecode(token);
+      console.log("Decoded Token:", decodedToken); // Log the decoded token
+      const email = decodedToken.email || decodedToken["cognito:username"];
+      if (email) {
+        console.log("Decoded email from token:", email); // Log the extracted email
         setUserEmail(email);
-      } catch (err) {
-        console.error("Error decoding token:", err);
+      } else {
+        console.error("No email found in the token.");
+      }
+    } catch (err) {
+      console.error("Error decoding token:", err); // Log decoding errors
+    }
+  } else {
+    console.error("No token provided. Cannot decode.");
+  }
+}, [token]);
+
+
+// Credits fetch effect
+useEffect(() => {
+  let isMounted = true;
+
+  const fetchCredits = async () => {
+    if (!userEmail) return;
+
+    console.log("User Email:", userEmail);
+    console.log("Calling URL:", `${process.env.REACT_APP_API_BASE_URL}/check-credits`);
+
+    setLoadingCredits(true);
+    setCreditsError(null);
+
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_BASE_URL}/check-credits`,
+        { email: userEmail },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log("Credits Response:", response.data);
+      if (isMounted) {
+        setRemainingCredits(response.data.credits);
+      }
+    } catch (err) {
+      console.error("Fetch Credits Error:", err.response || err);
+      if (isMounted) {
+        setCreditsError("Failed to fetch remaining credits.");
+      }
+    } finally {
+      if (isMounted) {
+        setLoadingCredits(false);
       }
     }
-  }, [token]);
+  };
 
-  // Credits fetch effect
-  useEffect(() => {
-    let isMounted = true;
+  fetchCredits();
 
-    const fetchCredits = async () => {
-      if (!userEmail) return;
+  return () => {
+    isMounted = false;
+  };
+}, [userEmail, token]); // <-- Close the useEffect dependencies array properly
 
-      setLoadingCredits(true);
-      setCreditsError(null);
 
-      try {
-        const response = await axios.post(
-          "http://localhost:5000/check-credits",
-          { email: userEmail },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        if (isMounted) {
-          setRemainingCredits(response.data.credits);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setCreditsError("Failed to fetch remaining credits.");
-        }
-      } finally {
-        if (isMounted) {
-          setLoadingCredits(false);
-        }
-      }
-    };
-
-    fetchCredits();
-    return () => { isMounted = false; };
-  }, [userEmail, token]);
 
   // Payment methods fetch effect
   useEffect(() => {
@@ -88,7 +108,7 @@ const Dashboard = ({ token, email }) => {
 
       try {
         const response = await axios.post(
-          "http://localhost:5000/get-payment-methods",
+          `${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`,
           { email: userEmail },
           {
             headers: {
@@ -127,7 +147,7 @@ const Dashboard = ({ token, email }) => {
 
       try {
         const response = await axios.post(
-          "http://localhost:5000/get-purchase-history",
+          `${process.env.REACT_APP_API_BASE_URL}/get-purchase-history`,
           { email: userEmail },
           {
             headers: {
@@ -161,78 +181,85 @@ const Dashboard = ({ token, email }) => {
 
   // Handler functions
   const handleQuickBuy = async () => {
-    if (!paymentMethods?.length) {
-      await handleStripeCheckout();
-      return;
-    }
+  if (!paymentMethods?.length) {
+    await handleStripeCheckout();
+    return;
+  }
 
-    setProcessing(true);
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/purchase-pack",
-        {
-          email: userEmail,
-          priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ",
-          paymentMethodId: paymentMethods[0].id,
+  const priceId = "price_1QOv9IAUGHTClvwyzELdaAiQ"; // Replace with appropriate value
+  const paymentMethodId = paymentMethods[0]?.id; // Assume default to first payment method
+
+  setProcessing(true);
+  try {
+    const response = await axios.post(
+      `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
+      {
+        email: userEmail,
+        priceId,
+        paymentMethodId,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      setRemainingCredits(response.data.remainingCredits);
-      setShowPopup(false);
-      setShowSuccessModal(true);
-    } catch (error) {
-      const errorMessage = error.response?.data?.error?.message;
-      
-      if (error.response?.data?.error?.code === 'card_declined' || 
-          errorMessage?.includes('declined') || 
-          errorMessage?.includes('expired')) {
-        setError("Your card was declined. Redirecting to checkout to update payment method.");
-        setShowPopup(false);
-        setTimeout(handleStripeCheckout, 2000);
-      } else {
-        setError(errorMessage || "Failed to complete purchase. Please try again.");
       }
-    } finally {
-      setProcessing(false);
+    );
+
+    setRemainingCredits(response.data.remainingCredits);
+    setShowPopup(false);
+    setShowSuccessModal(true);
+  } catch (error) {
+    const errorMessage = error.response?.data?.error?.message;
+
+    if (
+      error.response?.data?.error?.code === "card_declined" ||
+      errorMessage?.includes("declined") ||
+      errorMessage?.includes("expired")
+    ) {
+      setError("Your card was declined. Redirecting to checkout to update payment method.");
+      setShowPopup(false);
+      setTimeout(handleStripeCheckout, 2000);
+    } else {
+      setError(errorMessage || "Failed to complete purchase. Please try again.");
     }
-  };
+  } finally {
+    setProcessing(false);
+  }
+};
+
 
   const handleStripeCheckout = async () => {
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/create-checkout-session",
-        { 
-          email: userEmail,
-          priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ"
+  try {
+    const response = await axios.post(
+      `${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`,
+      {
+        email: userEmail,
+        priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ", // Adjust if needed
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-      
-      if (response.data.url) {
-        window.location.href = response.data.url;
-      } else {
-        throw new Error('No checkout URL received');
       }
-    } catch (error) {
-      console.error("Error initiating checkout:", error);
-      setError("Failed to initiate checkout. Please try again.");
+    );
+
+    if (response.data.url) {
+      window.location.href = response.data.url;
+    } else {
+      throw new Error("No checkout URL received");
     }
-  };
+  } catch (error) {
+    console.error("Error initiating checkout:", error);
+    setError("Failed to initiate checkout. Please try again.");
+  }
+};
+
 
   const handleAddPaymentMethod = async () => {
     try {
       const response = await axios.post(
-        "http://localhost:5000/create-setup-intent",
+        `${process.env.REACT_APP_API_BASE_URL}/create-setup-intent`,
         { email: userEmail },
         {
           headers: {
@@ -252,7 +279,7 @@ const Dashboard = ({ token, email }) => {
   const handleSetDefault = async (paymentMethodId) => {
     try {
       await axios.post(
-        "http://localhost:5000/set-default-payment",
+        `${process.env.REACT_APP_API_BASE_URL}/set-default-payment`,
         { paymentMethodId },
         {
           headers: {
@@ -262,7 +289,7 @@ const Dashboard = ({ token, email }) => {
       );
       
       const response = await axios.post(
-        "http://localhost:5000/get-payment-methods",
+        `${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`,
         { email: userEmail },
         {
           headers: {
@@ -526,7 +553,7 @@ const handleDelete = (paymentMethodId, cardInfo) => {
           onClick={async () => {
             try {
               await axios.post(
-                "http://localhost:5000/delete-payment-method",
+                `${process.env.REACT_APP_API_BASE_URL}/delete-payment-method`,
                 { paymentMethodId: showDeleteConfirm.paymentMethodId },
                 {
                   headers: {
@@ -536,7 +563,7 @@ const handleDelete = (paymentMethodId, cardInfo) => {
               );
               
               const response = await axios.post(
-                "http://localhost:5000/get-payment-methods",
+                `${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`,
                 { email: userEmail },
                 {
                   headers: {

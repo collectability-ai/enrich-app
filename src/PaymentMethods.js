@@ -12,13 +12,14 @@ const PaymentMethods = ({ userEmail }) => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5000/get-payment-methods', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: userEmail }),
-      });
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ email: userEmail }),
+});
+
 
       if (!response.ok) {
         throw new Error('Failed to fetch payment methods');
@@ -38,15 +39,13 @@ const PaymentMethods = ({ userEmail }) => {
     fetchPaymentMethods();
   }, [userEmail]);
 
-  const handleAddPaymentMethod = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/create-setup-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: userEmail }),
-      });
+  const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-setup-intent`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ email: userEmail }),
+});
 
       const { clientSecret } = await response.json();
 
@@ -72,16 +71,16 @@ const PaymentMethods = ({ userEmail }) => {
 
   const handleSetDefault = async (paymentMethodId) => {
     try {
-      const response = await fetch('http://localhost:5000/set-default-payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          email: userEmail,
-          paymentMethodId 
-        }),
-      });
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/set-default-payment`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ 
+    email: userEmail,
+    paymentMethodId 
+  }),
+});
 
       if (!response.ok) {
         throw new Error('Failed to set default payment method');
@@ -99,16 +98,17 @@ const PaymentMethods = ({ userEmail }) => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/delete-payment-method', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          email: userEmail,
-          paymentMethodId 
-        }),
-      });
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/delete-payment-method`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ 
+    email: userEmail,
+    paymentMethodId 
+  }),
+});
+
 
       if (!response.ok) {
         throw new Error('Failed to delete payment method');

@@ -27,9 +27,9 @@ const SearchHistory = ({ userEmail, token }) => {
     }
 
     try {
-      console.log("Fetching search history for:", userEmail);
+      console.log("Calling URL:", `${process.env.REACT_APP_API_BASE_URL}/get-search-history`);
       const response = await axios.post(
-        "http://localhost:5000/get-search-history",
+        `${process.env.REACT_APP_API_BASE_URL}/get-search-history`,
         { email: userEmail },
         {
           headers: {
