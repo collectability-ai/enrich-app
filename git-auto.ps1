@@ -1,8 +1,8 @@
-# Script to automate Git commit, push, and versioning
+# Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.2.9"
-$description = Updated all confirmation popup modals to match theme.
+$version = "v1.3.0"
+$description = "updated env files and dynamicURLS"
 
 # Add all changes
 git add .
@@ -13,8 +13,8 @@ git commit -m "${version}: ${description}"
 # Tag the commit with the version number
 git tag -a $version -m "Release ${version}: ${description}"
 
-# Push the commit and tag to the repository
-git push origin main
+# Push the commit and tag to the development branch
+git push origin development
 git push origin $version
 
-Write-Host "Successfully pushed changes and created tag $version"
+Write-Host "Successfully pushed changes and created tag $version on the development branch"
