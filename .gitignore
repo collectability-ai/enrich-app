@@ -10,6 +10,7 @@
 .env.production
 .env.powershell
 backend/set-env.ps1
+backend/testing-env.json
 
 # testing
 /coverage
