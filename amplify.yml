@@ -8,9 +8,6 @@ applications:
         build:
           commands:
             - npm run build
-        postBuild:
-          commands:
-            - echo "Frontend build completed"
       artifacts:
         baseDirectory: build
         files:
@@ -18,29 +15,29 @@ applications:
       cache:
         paths:
           - node_modules/**/*
+    appRoot: /
   - backend:
       phases:
         preBuild:
           commands:
-            - cd backend
+            - mkdir dist
             - npm ci
         build:
           commands:
-            - echo "Starting backend build..."
             - npm run build
-        postBuild:
-          commands:
-            - echo "Backend build completed"
       artifacts:
-        baseDirectory: backend
+        baseDirectory: backend/dist
         files:
           - '**/*'
-          - '!node_modules/**/*'
         discard-paths: no
       cache:
         paths:
           - backend/node_modules/**/*
-      env:
-        variables:
-          NODE_ENV: production
-          PORT: 8080
+      appRoot: /backend
+    env:
+      variables:
+        NODE_ENV: production
+        APP_URL: ${APP_URL}
+        CLIENT_URL: ${CLIENT_URL}
+        API_ENDPOINT: ${API_ENDPOINT}
+        PORT: ${PORT}

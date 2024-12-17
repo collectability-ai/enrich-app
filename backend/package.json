@@ -2,12 +2,12 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "server.js",
-   "scripts": {
+  "scripts": {
     "start": "node -r dotenv/config server.js",
     "dev": "nodemon -r dotenv/config server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "NODE_ENV=production node -r dotenv/config server.js",
-    "build:production": "NODE_ENV=production node -r dotenv/config server.js"
+    "build": "echo \"Build step completed\" && powershell Copy-Item server.js,server-config.js,package.json -Destination dist/",
+    "postbuild": "cd dist && npm install --omit=dev"
   },
   "keywords": [],
   "author": "",
