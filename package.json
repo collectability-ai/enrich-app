@@ -29,6 +29,7 @@
     "lucide-react": "^0.468.0",
     "node-fetch": "^2.7.0",
     "oidc-client-ts": "^3.1.0",
+    "path": "^0.12.7",
     "process": "^0.11.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -38,10 +39,11 @@
     "stream-browserify": "^3.0.0",
     "tailwind-merge": "^2.5.5",
     "web-vitals": "^2.1.4"
-  },
+ },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:production": "REACT_APP_ENVIRONMENT=production react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

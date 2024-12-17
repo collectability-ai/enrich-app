@@ -50,6 +50,7 @@ const bodyParser = require("body-parser");
 const stripe = require("stripe")(stripeKey);
 const winston = require("winston");
 const cors = require("cors");
+const path = require("path");
 
 // Debug log to verify environment
 console.log("Environment:", process.env.NODE_ENV || 'development');
@@ -120,12 +121,31 @@ const logger = winston.createLogger({
 
 // Middleware setup
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.APP_URL 
+    : 'http://localhost:3000',
   methods: ["GET", "POST"],
   credentials: true,
 }));
 app.use(cookieParser());
 app.use(bodyParser.json());
+
+// Serve static files from React build
+if (process.env.NODE_ENV === 'production') {
+    const buildPath = path.join(__dirname, '..', 'build');
+    logger.info(`Attempting to serve static files from: ${buildPath}`);
+    try {
+        const fs = require('fs');
+        if (fs.existsSync(buildPath)) {
+            app.use(express.static(buildPath));
+            logger.info('Successfully configured static file serving');
+        } else {
+            logger.error(`Build directory not found at: ${buildPath}`);
+        }
+    } catch (error) {
+        logger.error('Error setting up static file serving:', error);
+    }
+}
 
 // Token validation middleware
 const verifyToken = (req, res, next) => {
