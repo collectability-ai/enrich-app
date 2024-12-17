@@ -1,6 +1,39 @@
 // Load environment variables first
 require("dotenv").config();
 
+// First define the validation function
+function validateEnvironmentVariables() {
+  const requiredVars = [
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_REGION'
+  ];
+
+  const missing = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missing.length > 0) {
+    console.error('Missing required environment variables:', missing);
+    console.error('Current environment variables:');
+    console.error('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Missing');
+    console.error('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Missing');
+    console.error('AWS_REGION:', process.env.AWS_REGION);
+    process.exit(1);
+  }
+
+  // If all variables are present, initialize AWS configuration
+  const region = process.env.AWS_REGION;
+  return {
+    region,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    }
+  };
+}
+
+// Then call the function to get the config
+const awsConfig = validateEnvironmentVariables();
+
 // Verify Stripe key is loaded
 const stripeKey = process.env.NODE_ENV === "production"
   ? process.env.STRIPE_LIVE_SECRET_KEY
@@ -46,8 +79,7 @@ const jwksClient = require("jwks-rsa");
 const app = express();
 
 // Constants
-const region = process.env.AWS_REGION || "us-east-2";
-console.log("Using AWS Region:", region); // Temporary log for verification
+console.log("Using AWS Region:", awsConfig.region); // Temporary log for verification
 const USER_CREDITS_TABLE = "EnV_UserCredits"; // Make sure this matches exactly
 const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
 const CREDIT_COSTS = {
@@ -57,24 +89,20 @@ const CREDIT_COSTS = {
 };
 
 // Configure AWS Clients
-const dynamoDBClient = new DynamoDBClient({ region });
+const dynamoDBClient = new DynamoDBClient(awsConfig);
 const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
-const cognitoClient = new CognitoIdentityProviderClient({ region });
+const cognitoClient = new CognitoIdentityProviderClient(awsConfig);
 
 // Initialize SignatureV4 signer
 const signer = new SignatureV4({
   service: "execute-api",
-  region,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  ...awsConfig,
   sha256: Sha256,
 });
 
 // Configure JWKS client
 const client = jwksClient({
-  jwksUri: `https://cognito-idp.${region}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+  jwksUri: `https://cognito-idp.${awsConfig.region}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
 });
 
 // Initialize Winston logger

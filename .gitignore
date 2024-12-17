@@ -8,6 +8,9 @@
 .env.development
 .env.testing
 .env.production
+.env.powershell
+backend/set-env.ps1
+backend/testing-env.json
 
 # testing
 /coverage
@@ -47,3 +50,25 @@ amplifytools.xcconfig
 # Logs
 backend/backend.log
 backend/*.log
+
+#amplify-do-not-edit-begin
+amplify/\#current-cloud-backend
+amplify/.config/local-*
+amplify/logs
+amplify/mock-data
+amplify/mock-api-resources
+amplify/backend/amplify-meta.json
+amplify/backend/.temp
+build/
+dist/
+node_modules/
+aws-exports.js
+awsconfiguration.json
+amplifyconfiguration.json
+amplifyconfiguration.dart
+amplify-build-config.json
+amplify-gradle-config.json
+amplifytools.xcconfig
+.secret-*
+**.sample
+#amplify-do-not-edit-end
