@@ -8,6 +8,8 @@
 .env.development
 .env.testing
 .env.production
+.env.powershell
+backend/set-env.ps1
 
 # testing
 /coverage
