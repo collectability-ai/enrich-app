@@ -25,6 +25,10 @@ const { SignatureV4 } = require("@aws-sdk/signature-v4");
 const { Sha256 } = require("@aws-crypto/sha256-browser");
 const axios = require("axios");
 
+console.log("AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
+console.log("AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
+console.log("AWS_REGION:", process.env.AWS_REGION);
+
 // Enhanced Utility Functions
 async function getUserCredits(email) {
   if (!email) {

@@ -182,15 +182,29 @@ useEffect(() => {
   // Handler functions
   const handleQuickBuy = async () => {
   if (!paymentMethods?.length) {
+    console.log("No payment methods available. Redirecting to checkout...");
     await handleStripeCheckout();
     return;
   }
 
+  // Log the paymentMethods array to debug
+  console.log("Payment Methods:", paymentMethods);
+
+  // Find the default payment method
+  const defaultPaymentMethod = paymentMethods.find((method) => method.isDefault) || paymentMethods[0];
+  console.log("Selected Payment Method:", defaultPaymentMethod);
+
+  const paymentMethodId = defaultPaymentMethod?.id;
   const priceId = "price_1QOv9IAUGHTClvwyzELdaAiQ"; // Replace with appropriate value
-  const paymentMethodId = paymentMethods[0]?.id; // Assume default to first payment method
+
+  if (!paymentMethodId) {
+    console.error("No valid payment method ID found.");
+    return;
+  }
 
   setProcessing(true);
   try {
+    console.log("Sending Purchase Request...");
     const response = await axios.post(
       `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
       {
@@ -205,10 +219,13 @@ useEffect(() => {
       }
     );
 
+    console.log("Purchase Response:", response.data);
     setRemainingCredits(response.data.remainingCredits);
     setShowPopup(false);
     setShowSuccessModal(true);
   } catch (error) {
+    console.error("Error during purchase:", error.response?.data || error.message);
+
     const errorMessage = error.response?.data?.error?.message;
 
     if (
@@ -226,6 +243,7 @@ useEffect(() => {
     setProcessing(false);
   }
 };
+
 
 
   const handleStripeCheckout = async () => {
@@ -489,45 +507,50 @@ const handleDelete = (paymentMethodId, cardInfo) => {
         {userEmail && <SearchHistory userEmail={userEmail} token={token} />}
       </div>
 
-      {/* Confirmation Modal */}
-     {showPopup && paymentMethods && paymentMethods[0] && (
-       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-         <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
-           <h3 className="text-xl font-semibold mb-4">Confirm Purchase</h3>
-           <p className="text-gray-600 mb-6">
-             You are about to purchase <span className="font-medium text-gray-800">50 credits for $19.97</span>
-             <br />
-             using <span className="font-medium text-gray-800">{paymentMethods[0].brand} •••• {paymentMethods[0].last4}</span>
-           </p>
-           <div className="flex gap-3">
-             <button
-               onClick={handleQuickBuy}
-               disabled={processing}
-               className={`flex-1 px-4 py-2 rounded-md text-white font-medium transition-colors inline-flex items-center justify-center gap-2 
-                 ${processing 
-                   ? "bg-gray-400 cursor-not-allowed" 
-                   : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
-             >
-               {processing ? (
-                 <>
-                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                   <span>Processing...</span>
-                 </>
-               ) : (
-                 "Confirm"
-               )}
-             </button>
-             <button
-               onClick={() => setShowPopup(false)}
-               disabled={processing}
-               className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
-             >
-               Cancel
-             </button>
-           </div>
-         </div>
-       </div>
-     )}
+     {/* Confirmation Modal */}
+{showPopup && paymentMethods && paymentMethods[0] && (() => {
+  const defaultPaymentMethod = paymentMethods.find((method) => method.isDefault) || paymentMethods[0];
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
+        <h3 className="text-xl font-semibold mb-4">Confirm Purchase</h3>
+        <p className="text-gray-600 mb-6">
+          You are about to purchase <span className="font-medium text-gray-800">50 credits for $19.97</span>
+          <br />
+          using <span className="font-medium text-gray-800">{defaultPaymentMethod.brand} •••• {defaultPaymentMethod.last4}</span>
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={handleQuickBuy}
+            disabled={processing}
+            className={`flex-1 px-4 py-2 rounded-md text-white font-medium transition-colors inline-flex items-center justify-center gap-2 
+              ${processing 
+                ? "bg-gray-400 cursor-not-allowed" 
+                : "bg-[#67cad8] hover:bg-[#5ab5c2]"}`}
+          >
+            {processing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              "Confirm"
+            )}
+          </button>
+          <button
+            onClick={() => setShowPopup(false)}
+            disabled={processing}
+            className="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-md font-medium transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+})()}
+
 
      {/* Success Modal */}
      <SuccessModal 

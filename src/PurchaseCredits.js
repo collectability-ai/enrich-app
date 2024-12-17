@@ -111,21 +111,25 @@ const PurchaseCredits = ({ userEmail, token }) => {
 
       const data = await response.json();
 
-      if (data.paymentMethods && data.paymentMethods.length > 0) {
-        setPaymentMethod(data.paymentMethods[0]);
-        setShowConfirmModal(true);
-      } else {
-        console.log("No payment methods found, creating Stripe Checkout session...");
-        const checkoutResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: userEmail,
-            priceId: pack.priceId,
-          }),
-        });
+if (data.paymentMethods && data.paymentMethods.length > 0) {
+  // Find the default payment method
+  const defaultMethod = data.paymentMethods.find((method) => method.isDefault);
+
+  // Use the default method or fallback to the first one
+  setPaymentMethod(defaultMethod || data.paymentMethods[0]);
+  setShowConfirmModal(true);
+} else {
+  console.log("No payment methods found, creating Stripe Checkout session...");
+  const checkoutResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: userEmail,
+      priceId: pack.priceId,
+    }),
+  });
 
         if (!checkoutResponse.ok) {
           throw new Error("Failed to create a checkout session.");
