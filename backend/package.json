@@ -6,8 +6,7 @@
     "start": "node -r dotenv/config server.js",
     "dev": "nodemon -r dotenv/config server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "echo \"Build step completed\" && powershell Copy-Item server.js,server-config.js,package.json -Destination dist/",
-    "postbuild": "cd dist && npm install --omit=dev"
+    "build": "mkdir -p dist && cp server.js server-config.js package.json dist/ && cd dist && npm install --omit=dev"
   },
   "keywords": [],
   "author": "",
