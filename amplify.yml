@@ -15,12 +15,12 @@ applications:
       cache:
         paths:
           - node_modules/**/*
-    appRoot: /
+      appRoot: .
   - backend:
       phases:
         preBuild:
           commands:
-            - mkdir dist
+            - cd backend
             - npm ci
         build:
           commands:
@@ -33,7 +33,7 @@ applications:
       cache:
         paths:
           - backend/node_modules/**/*
-      appRoot: /backend
+      appRoot: .
     env:
       variables:
         NODE_ENV: production
