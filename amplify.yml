@@ -5,9 +5,10 @@ frontend:
       commands:
         - echo "Current directory:"
         - pwd
-        - echo "Directory contents:"
+        - cd ..
+        - echo "After cd .. contents:"
         - ls -la
-        - cd frontend || exit 1
+        - cd frontend
         - npm ci
     build:
       commands:
@@ -23,11 +24,7 @@ backend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory:"
-        - pwd
-        - echo "Directory contents:"
-        - ls -la
-        - cd backend || exit 1
+        - cd backend
         - npm ci
     build:
       commands:
