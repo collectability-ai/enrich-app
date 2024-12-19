@@ -3,7 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - nvm use 22.11.0
+        - echo "Installing Node 22"
+        - n 22  # Uses 'n' Node version manager to install and use Node 22
+        - node --version  # Verify Node version
+        - npm --version  # Verify npm version
         - echo "Current directory $(pwd)"
         - echo "Listing directory contents" && ls -la
         - npm ci
@@ -12,8 +15,8 @@ frontend:
         - cd backend && npm ci && cd ..
     build:
       commands:
-        - echo "Building frontend"
-        - CI=false npm run build
+        - echo "Building frontend for testing environment"
+        - npm run build:testing  # Use the testing-specific build script
         - echo "Building backend"
         - cd backend
         - mkdir -p dist
