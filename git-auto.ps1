@@ -1,7 +1,7 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.5.3"
+$version = "v1.5.4"
 $description = "node version update"
 
 # Add all changes

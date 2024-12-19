@@ -8,10 +8,11 @@ frontend:
         - npm --version
         - echo "Current directory $(pwd)"
         - echo "Listing directory contents" && ls -la
-        - npm ci
+        - npm cache clean --force  # Add this line to clear cache
+        - npm install  # Existing install command
         - npm install -g react-scripts
         - echo "Installing backend dependencies"
-        - cd backend && npm ci && cd ..
+        - cd backend && npm install && cd ..
     build:
       commands:
         - echo "Building frontend for testing environment"
