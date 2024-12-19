@@ -21,6 +21,7 @@ backend/test-*.ps1
 **/dist
 frontend/build
 backend/dist
+enrich-app.wiki
 
 # Development Tools
 .vscode/
