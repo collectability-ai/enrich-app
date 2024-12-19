@@ -3,6 +3,7 @@ frontend:
   phases:
     preBuild:
       commands:
+        - nvm use 22.11.0
         - echo "Current directory $(pwd)"
         - echo "Listing directory contents" && ls -la
         - npm ci
@@ -14,26 +15,18 @@ frontend:
         - echo "Building frontend"
         - CI=false npm run build
         - echo "Building backend"
-        - cd backend && npm run build
+        - cd backend
+        - mkdir -p dist
+        - npm run build
+        - cd ..
         - echo "Listing backend dist directory" && ls -la backend/dist
   artifacts:
     baseDirectory: build
     files:
       - '**/*'
-      - '../backend/dist/**/*'
+      - 'backend/dist/**/*'
   cache:
     paths:
       - node_modules/**/*
       - backend/node_modules/**/*
       - /root/.npm/**/*
-  customHeaders:
-    - pattern: '**/*'
-      headers:
-        - key: 'Strict-Transport-Security'
-          value: 'max-age=31536000; includeSubDomains'
-        - key: 'X-Frame-Options'
-          value: 'SAMEORIGIN'
-        - key: 'X-XSS-Protection'
-          value: '1; mode=block'
-        - key: 'X-Content-Type-Options'
-          value: 'nosniff'
