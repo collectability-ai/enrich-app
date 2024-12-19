@@ -119,14 +119,33 @@ const logger = winston.createLogger({
   ],
 });
 
+// Debug log the frontend URL being used
+console.log("Frontend URL Configuration:", {
+  NODE_ENV: process.env.NODE_ENV,
+  APP_URL: process.env.APP_URL,
+  FRONTEND_URL: process.env.FRONTEND_URL
+});
+
 // Middleware setup
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.APP_URL 
-    : 'http://localhost:3000',
+  origin: function(origin, callback) {
+    const allowedOrigin = process.env.NODE_ENV === 'production' 
+      ? process.env.APP_URL 
+      : process.env.NODE_ENV === 'testing'
+        ? 'https://testing.contactvalidate.com'
+        : process.env.FRONTEND_URL;
+    
+    console.log("CORS Origin Check:", { 
+      requestOrigin: origin, 
+      allowedOrigin: allowedOrigin 
+    });
+    
+    callback(null, allowedOrigin);
+  },
   methods: ["GET", "POST"],
   credentials: true,
 }));
+
 app.use(cookieParser());
 app.use(bodyParser.json());
 

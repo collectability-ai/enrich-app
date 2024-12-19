@@ -1,0 +1,7 @@
+{
+  "testing": {
+    "configLevel": "project",
+    "useProfile": true,
+    "profileName": "amplify-dev"
+  }
+}
