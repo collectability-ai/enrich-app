@@ -3,22 +3,28 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "Starting in:"
+        - pwd
         - cd ..
+        - BUILD_ROOT=$PWD
+        - echo "Build root is: $BUILD_ROOT"
         - cd frontend
-        - echo "Current frontend directory:"
+        - echo "Frontend directory:"
         - pwd
         - npm install --legacy-peer-deps
     build:
       commands:
-        - echo "Starting frontend build in:"
+        - echo "Building in:"
         - pwd
         - npm run build
-        - echo "Build completed, checking build directory:"
+        - echo "After build, contents:"
         - ls -la
         - echo "Build directory contents:"
         - ls -la build || echo "build directory not found"
+        - echo "Full path to build:"
+        - echo "$PWD/build"
   artifacts:
-    baseDirectory: ../frontend/build
+    baseDirectory: frontend/build  # Changed to relative from project root
     files:
       - '**/*'
   cache:
