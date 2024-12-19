@@ -5,12 +5,20 @@ frontend:
       commands:
         - cd ..
         - cd frontend
+        - echo "Current frontend directory:"
+        - pwd
         - npm install --legacy-peer-deps
     build:
       commands:
+        - echo "Starting frontend build in:"
+        - pwd
         - npm run build
+        - echo "Build completed, checking build directory:"
+        - ls -la
+        - echo "Build directory contents:"
+        - ls -la build || echo "build directory not found"
   artifacts:
-    baseDirectory: build
+    baseDirectory: ../frontend/build
     files:
       - '**/*'
   cache:
