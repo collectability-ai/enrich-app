@@ -1,31 +1,48 @@
-# dependencies
-/node_modules
+# Dependencies
+**/node_modules
 /.pnp
 .pnp.js
 
-# Environment variables
-.env
-.env.development
-.env.testing
-.env.production
-.env.powershell
+# Environment Variables
+**/.env
+**/.env.development
+**/.env.testing
+**/.env.production
+**/.env.powershell
 backend/set-env.ps1
 backend/testing-env.json
+backend/test-*.ps1
 
-# testing
+# Testing
 /coverage
 
-# production
-/build
-/dist
+# Production Build
+**/build
+**/dist
+frontend/build
+backend/dist
 
-# misc
-.DS_Store
+# Development Tools
+.vscode/
+git-auto/
+
+# Logs
+*.log
+backend/*.log
+backend/backend.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Amplify-specific files
+# Backend Specific
+backend/server.txt
+backend/backend.txt
+
+# System Files
+.DS_Store
+**/.DS_Store
+
+# Amplify Configuration
 # amplify-do-not-edit-begin
 amplify/\#current-cloud-backend
 amplify/.config/local-*
@@ -34,8 +51,6 @@ amplify/mock-data
 amplify/mock-api-resources
 amplify/backend/amplify-meta.json
 amplify/backend/.temp
-build/
-node_modules/
 aws-exports.js
 awsconfiguration.json
 amplifyconfiguration.json
@@ -46,30 +61,3 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 # amplify-do-not-edit-end
-
-# Logs
-backend/backend.log
-backend/*.log
-
-#amplify-do-not-edit-begin
-amplify/\#current-cloud-backend
-amplify/.config/local-*
-amplify/logs
-amplify/mock-data
-amplify/mock-api-resources
-amplify/backend/amplify-meta.json
-amplify/backend/.temp
-build/
-dist/
-node_modules/
-aws-exports.js
-awsconfiguration.json
-amplifyconfiguration.json
-amplifyconfiguration.dart
-amplify-build-config.json
-amplify-gradle-config.json
-amplifytools.xcconfig
-.secret-*
-**.sample
-#amplify-do-not-edit-end
-dist/

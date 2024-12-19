@@ -25,9 +25,13 @@ const { SignatureV4 } = require("@aws-sdk/signature-v4");
 const { Sha256 } = require("@aws-crypto/sha256-browser");
 const axios = require("axios");
 
-console.log("AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
-console.log("AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
-console.log("AWS_REGION:", process.env.AWS_REGION);
+// Debug logging for environment setup
+console.log("Starting server...");
+console.log("Environment:", process.env.NODE_ENV);
+console.log("AWS Configuration:");
+console.log("- AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
+console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
+console.log("- AWS_REGION:", process.env.AWS_REGION);
 
 // Enhanced Utility Functions
 async function getUserCredits(email) {
@@ -1184,9 +1188,15 @@ app.get("/auth/validate", (req, res) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-    // Handle React routing, return all requests to React app
     app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, 'build', 'index.html'));
+        const indexPath = path.join(__dirname, '..', 'build', 'index.html');
+        logger.info(`Serving index.html for path: ${req.path}`);
+        res.sendFile(indexPath, err => {
+            if (err) {
+                logger.error('Error serving index.html:', err);
+                res.status(500).send('Error loading application');
+            }
+        });
     });
 }
 
