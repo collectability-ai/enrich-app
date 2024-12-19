@@ -1,21 +1,27 @@
 version: 1
 applications:
   - appRoot: .
-    frontend:
       phases:
         preBuild:
           commands:
-            - cd frontend && npm ci
-            - cd ../backend && npm ci
+            - npm ci
+            - cd backend && npm ci
         build:
           commands:
-            - cd frontend && npm run build:production
-            - cd ../backend && npm run build
+            - npm run build
+            - cd backend && npm run build
       artifacts:
+        baseDirectory: build
         files:
           - '**/*'
-        baseDirectory: frontend/build
       cache:
         paths:
-          - frontend/node_modules/**/*
+          - node_modules/**/*
           - backend/node_modules/**/*
+    env:
+      variables:
+        NODE_ENV: ${NODE_ENV}
+        APP_URL: ${APP_URL}
+        CLIENT_URL: ${CLIENT_URL}
+        API_ENDPOINT: ${API_ENDPOINT}
+        PORT: ${PORT}
