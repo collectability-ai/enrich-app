@@ -1,23 +1,23 @@
 version: 1
 applications:
   - appRoot: .
-      phases:
-        preBuild:
-          commands:
-            - npm ci
-            - cd backend && npm ci
-        build:
-          commands:
-            - npm run build
-            - cd backend && npm run build
-      artifacts:
-        baseDirectory: build
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-          - backend/node_modules/**/*
+    phases:
+      preBuild:
+        commands:
+          - npm ci
+          - cd backend && npm ci
+      build:
+        commands:
+          - npm run build
+          - cd backend && npm run build
+    artifacts:
+      baseDirectory: build
+      files:
+        - '**/*'
+    cache:
+      paths:
+        - node_modules/**/*
+        - backend/node_modules/**/*
     env:
       variables:
         NODE_ENV: ${NODE_ENV}
