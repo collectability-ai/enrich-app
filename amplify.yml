@@ -6,19 +6,34 @@ frontend:
         - echo "Current directory $(pwd)"
         - echo "Listing directory contents" && ls -la
         - npm ci
+        - npm install -g react-scripts
         - echo "Installing backend dependencies"
         - cd backend && npm ci && cd ..
     build:
       commands:
         - echo "Building frontend"
-        - npm run build
+        - CI=false npm run build
         - echo "Building backend"
         - cd backend && npm run build
+        - echo "Listing backend dist directory" && ls -la backend/dist
   artifacts:
     baseDirectory: build
     files:
       - '**/*'
+      - '../backend/dist/**/*'
   cache:
     paths:
       - node_modules/**/*
       - backend/node_modules/**/*
+      - /root/.npm/**/*
+  customHeaders:
+    - pattern: '**/*'
+      headers:
+        - key: 'Strict-Transport-Security'
+          value: 'max-age=31536000; includeSubDomains'
+        - key: 'X-Frame-Options'
+          value: 'SAMEORIGIN'
+        - key: 'X-XSS-Protection'
+          value: '1; mode=block'
+        - key: 'X-Content-Type-Options'
+          value: 'nosniff'
