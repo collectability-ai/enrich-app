@@ -3,13 +3,9 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory:"
-        - pwd
         - cd ..
-        - echo "After cd .. contents:"
-        - ls -la
         - cd frontend
-        - npm ci
+        - npm install --legacy-peer-deps
     build:
       commands:
         - npm run build
