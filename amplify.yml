@@ -1,6 +1,7 @@
 version: 1
 applications:
-  - frontend:
+  - appRoot: frontend
+    frontend:
       phases:
         preBuild:
           commands:
@@ -15,23 +16,26 @@ applications:
       cache:
         paths:
           - node_modules/**/*
-  - backend:
+
+  - appRoot: backend
+    backend:
       phases:
         build:
           commands:
-            - cd backend
             - npm ci
       artifacts:
-        baseDirectory: backend
+        baseDirectory: .
         files:
           - '**/*'
         discard-paths: no
       cache:
         paths:
-          - backend/node_modules/**/*
+          - node_modules/**/*
+    
     env:
       variables:
         NODE_ENV: ${NODE_ENV}
         APP_URL: ${APP_URL}
+        CLIENT_URL: ${CLIENT_URL}
         API_ENDPOINT: ${API_ENDPOINT}
         PORT: ${PORT}
