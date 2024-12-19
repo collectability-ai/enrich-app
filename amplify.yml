@@ -1,48 +1,37 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - echo "Starting in:"
-        - pwd
-        - cd ..
-        - BUILD_ROOT=$PWD
-        - echo "Build root is: $BUILD_ROOT"
-        - cd frontend
-        - echo "Frontend directory:"
-        - pwd
-        - npm install --legacy-peer-deps
-    build:
-      commands:
-        - echo "Building in:"
-        - pwd
-        - npm run build
-        - echo "After build, contents:"
-        - ls -la
-        - echo "Build directory contents:"
-        - ls -la build || echo "build directory not found"
-        - echo "Full path to build:"
-        - echo "$PWD/build"
-  artifacts:
-    baseDirectory: frontend/build  # Changed to relative from project root
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/*
-backend:
-  phases:
-    preBuild:
-      commands:
-        - cd backend
-        - npm ci
-    build:
-      commands:
-        - npm run build
-  artifacts:
-    baseDirectory: dist
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/*
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: build
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+  - backend:
+      phases:
+        build:
+          commands:
+            - cd backend
+            - npm ci
+      artifacts:
+        baseDirectory: backend
+        files:
+          - '**/*'
+        discard-paths: no
+      cache:
+        paths:
+          - backend/node_modules/**/*
+    env:
+      variables:
+        NODE_ENV: ${NODE_ENV}
+        APP_URL: ${APP_URL}
+        API_ENDPOINT: ${API_ENDPOINT}
+        PORT: ${PORT}
