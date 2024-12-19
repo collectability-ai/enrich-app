@@ -8,7 +8,7 @@ applications:
             - npm ci
         build:
           commands:
-            - npm run build
+            - npm run build:production
       artifacts:
         baseDirectory: build
         files:
@@ -20,21 +20,23 @@ applications:
   - appRoot: backend
     backend:
       phases:
-        build:
+        preBuild:
           commands:
             - npm ci
+        build:
+          commands:
+            - npm run build
       artifacts:
-        baseDirectory: .
+        baseDirectory: dist
         files:
           - '**/*'
         discard-paths: no
       cache:
         paths:
           - node_modules/**/*
-    
     env:
       variables:
-        NODE_ENV: ${NODE_ENV}
+        NODE_ENV: production
         APP_URL: ${APP_URL}
         CLIENT_URL: ${CLIENT_URL}
         API_ENDPOINT: ${API_ENDPOINT}
