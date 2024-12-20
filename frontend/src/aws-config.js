@@ -1,41 +1,33 @@
+// src/aws-config.js
 import { Amplify } from 'aws-amplify';
-import config from './config/config.testing';  // Import the testing config directly
-
-console.log('Loading configuration:', config);
+import config from './config';
 
 const awsConfig = {
   Auth: {
-    mandatorySignIn: true,
-    region: config.aws.region,
-    userPoolId: config.aws.userPoolId,
-    userPoolWebClientId: config.aws.userPoolWebClientId,
-    identityPoolId: config.aws.identityPoolId,
+    Cognito: {
+      region: config.AWS_REGION,
+      userPoolId: config.USER_POOL_ID,
+      userPoolClientId: config.USER_POOL_WEB_CLIENT_ID,
+      identityPoolId: config.IDENTITY_POOL_ID,
+    },
     oauth: {
-      domain: config.aws.authDomain,
+      domain: config.AUTH_DOMAIN,
       scope: ['email', 'openid', 'profile'],
-      redirectSignIn: config.auth.redirectSignIn,
-      redirectSignOut: config.auth.redirectSignOut,
+      redirectSignIn: config.REDIRECT_SIGN_IN,
+      redirectSignOut: config.REDIRECT_SIGN_OUT,
       responseType: 'code'
     },
     cookieStorage: {
-      domain: config.auth.cookieDomain,
+      domain: config.COOKIE_DOMAIN,
       path: '/',
       expires: 365,
       sameSite: "strict",
-      secure: config.environment === 'production'
+      secure: config.ENVIRONMENT === 'production'
     }
   }
 };
 
-// Log the complete configuration before applying it
-console.log('Auth Configuration:', {
-  region: awsConfig.Auth.region,
-  userPoolId: awsConfig.Auth.userPoolId,
-  userPoolWebClientId: awsConfig.Auth.userPoolWebClientId,
-  identityPoolId: awsConfig.Auth.identityPoolId,
-  authDomain: awsConfig.Auth.oauth.domain,
-  cookieDomain: awsConfig.Auth.cookieStorage.domain
-});
+console.log("Amplify Config:", awsConfig);
 
 Amplify.configure(awsConfig);
 
