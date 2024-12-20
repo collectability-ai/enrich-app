@@ -10,7 +10,7 @@ frontend:
         - echo "Listing directory contents" && ls -la
         - npm cache clean --force
         - npm install
-        - npm install react-oidc-context@3.2.0  # Add only this line
+        - npm install --save lucide-react @babel/plugin-proposal-private-property-in-object
         - npm install -g react-scripts
         - echo "Installing backend dependencies"
         - cd backend && npm install && cd ..

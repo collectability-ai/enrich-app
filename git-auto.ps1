@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.5.7"
-$description = "yaml update"
+$version = "v1.5.8"
+$description = "added lucide install"
 
 # Add all changes
 git add .
