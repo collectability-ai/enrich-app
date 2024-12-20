@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.7.6"
-$description = "redo react app variables"
+$version = "v1.7.7"
+$description = "test react app variables"
 
 # Add all changes
 git add .

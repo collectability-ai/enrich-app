@@ -10,6 +10,7 @@ import PurchaseCredits from "./PurchaseCredits";
 import Signup from "./Signup";
 import Login from "./Login";
 import VerifyEmail from "./VerifyEmail";
+import EnvTest from "./EnvTest"; // Import the new component
 import './aws-config';
 
 const App = () => {
@@ -164,6 +165,10 @@ return (
         <Route
           path="/results"
           element={isLoggedIn ? <ResultsPage /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/env-test"
+          element={<EnvTest />} // Add the new route
         />
         <Route
           path="*"
