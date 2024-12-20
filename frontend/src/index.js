@@ -9,7 +9,7 @@ import App from "./App";
 const amplifyConfig = {
   Auth: {
     region: process.env.REACT_APP_AWS_REGION,
-    userPoolId: process.env.REACT_APP_USER_POOL_ID,
+    userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID, // Updated to match the environment variable name
     userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
     identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
     oauth: {
@@ -33,7 +33,7 @@ const amplifyConfig = {
 console.log('Environment:', process.env.REACT_APP_ENVIRONMENT);
 console.log('Amplify Configuration:', {
   region: process.env.REACT_APP_AWS_REGION,
-  userPoolId: process.env.REACT_APP_USER_POOL_ID,
+  userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID,
   userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
   identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
   authDomain: process.env.REACT_APP_AUTH_DOMAIN,
