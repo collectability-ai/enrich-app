@@ -3,59 +3,46 @@ frontend:
   phases:
     preBuild:
       commands:
-        - "echo \"Node $(node --version)\""
-        - "echo \"NPM $(npm --version)\""
-        - "echo \"Starting in directory: $(pwd)\""
-        - ls -la
-        - cd frontend
-        - "echo \"Changed to frontend directory: $(pwd)\""
-        - npm cache clean --force
-        - npm install --legacy-peer-deps
-        - cd ..
-        - "if [ -d \"backend\" ]; then cd backend && npm install --legacy-peer-deps && cd ..; fi"
+        - echo "Node version $(node --version)"
+        - echo "NPM version $(npm --version)"
+        - echo "Starting in directory $(pwd)"
+        - npm ci
     build:
       commands:
-        - "echo \"Setting build environment...\""
+        - echo "Setting build environment..."
+        - |
+          cat << EOF > .env.production
+          REACT_APP_ENVIRONMENT=$REACT_APP_ENVIRONMENT
+          REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+          REACT_APP_AWS_REGION=$REACT_APP_AWS_REGION
+          REACT_APP_USER_POOL_ID=$REACT_APP_USER_POOL_ID
+          REACT_APP_USER_POOL_WEB_CLIENT_ID=$REACT_APP_USER_POOL_WEB_CLIENT_ID
+          REACT_APP_IDENTITY_POOL_ID=$REACT_APP_IDENTITY_POOL_ID
+          REACT_APP_AUTH_DOMAIN=$REACT_APP_AUTH_DOMAIN
+          REACT_APP_REDIRECT_SIGN_IN=$REACT_APP_REDIRECT_SIGN_IN
+          REACT_APP_REDIRECT_SIGN_OUT=$REACT_APP_REDIRECT_SIGN_OUT
+          REACT_APP_COOKIE_DOMAIN=$REACT_APP_COOKIE_DOMAIN
+          EOF
+        - echo "Environment file created:"
+        - cat .env.production
         - export CI=false
         - export GENERATE_SOURCEMAP=false
-        - "export NODE_OPTIONS=\"--max-old-space-size=8192\""
-        - export REACT_APP_ENVIRONMENT=testing
-        - export REACT_APP_API_BASE_URL=$API_BASE_URL
-        - export REACT_APP_AWS_REGION=$AWS_REGION
-        - export REACT_APP_USER_POOL_ID=$USER_POOL_ID
-        - export REACT_APP_USER_POOL_WEB_CLIENT_ID=$USER_POOL_WEB_CLIENT_ID
-        - export REACT_APP_IDENTITY_POOL_ID=$IDENTITY_POOL_ID
-        - export REACT_APP_COGNITO_AUTHORITY=$COGNITO_AUTHORITY
-        - export REACT_APP_USER_POOL_WEB_CLIENT_ID=$COGNITO_CLIENT_ID
-        - export REACT_APP_REDIRECT_URI=$REDIRECT_URI
-        - "echo \"Building frontend...\""
-        - cd frontend
+        - export NODE_OPTIONS="--max-old-space-size=8192"
+        - echo "Starting build..."
         - npm run build
-        - cd ..
-        - |
-          if [ -d "backend" ]; then
-            cd backend
-            mkdir -p dist
-            npm run build
-            cd ..
-          fi
-        - "echo \"Build complete. Checking output...\""
-        - cd frontend
+        - echo "Build complete. Checking output..."
         - ls -la build/
   artifacts:
-    baseDirectory: frontend/build
+    baseDirectory: build
     files:
-      - "**/*"
-      - "../backend/dist/**/*"
+      - '**/*'
   cache:
     paths:
-      - frontend/node_modules/**/*
-      - backend/node_modules/**/*
-      - /root/.npm/**/*
+      - node_modules/**/*
   customHeaders:
-    - pattern: "**/*"
+    - pattern: '**/*'
       headers:
-        - key: "Cache-Control"
-          value: "public, max-age=31536000"
-        - key: "Strict-Transport-Security"
-          value: "max-age=31536000; includeSubDomains"
+        - key: 'Cache-Control'
+          value: 'public, max-age=31536000'
+        - key: 'Strict-Transport-Security'
+          value: 'max-age=31536000; includeSubDomains'
