@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.6.8"
-$description = "added amplify install"
+$version = "v1.6.9"
+$description = "fixed aws-config"
 
 # Add all changes
 git add .
