@@ -8,7 +8,7 @@ import App from "./App";
 // Cognito and environment configurations
 const cognitoAuthConfig = {
   authority: process.env.REACT_APP_COGNITO_AUTHORITY,
-  client_id: process.env.REACT_APP_COGNITO_CLIENT_ID,
+  client_id: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
   redirect_uri: process.env.REACT_APP_REDIRECT_URI,
   response_type: "code",
   scope: "email openid",
@@ -20,7 +20,7 @@ if (process.env.NODE_ENV === "development") {
     ENVIRONMENT: process.env.REACT_APP_ENVIRONMENT,
     API_BASE_URL: process.env.REACT_APP_API_BASE_URL,
     COGNITO_AUTHORITY: process.env.REACT_APP_COGNITO_AUTHORITY,
-    COGNITO_CLIENT_ID: process.env.REACT_APP_COGNITO_CLIENT_ID,
+    COGNITO_CLIENT_ID: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
     REDIRECT_URI: process.env.REACT_APP_REDIRECT_URI,
   });
 }
