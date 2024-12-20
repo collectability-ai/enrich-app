@@ -3,33 +3,11 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Node version $(node --version)"
-        - echo "NPM version $(npm --version)"
         - cd frontend
         - npm ci
     build:
       commands:
-        - echo "Setting environment variables..."
-        - |
-          cat << EOF > .env
-          REACT_APP_ENVIRONMENT=testing
-          REACT_APP_AWS_REGION=us-east-2
-          REACT_APP_USER_POOL_ID=us-east-2_EHz7xWNbm
-          REACT_APP_USER_POOL_WEB_CLIENT_ID=64iqduh82e6tvd5orlkn7rktc8
-          REACT_APP_IDENTITY_POOL_ID=us-east-2:f9c3a654-2df9-49fb-8161-09cbc0c58634
-          REACT_APP_AUTH_DOMAIN=us-east-2ehz7xwnbm.auth.us-east-2.amazoncognito.com
-          REACT_APP_REDIRECT_SIGN_IN=https://testing.contactvalidate.com/
-          REACT_APP_REDIRECT_SIGN_OUT=https://testing.contactvalidate.com/
-          REACT_APP_COOKIE_DOMAIN=testing.contactvalidate.com
-          REACT_APP_API_BASE_URL=https://testing.contactvalidate.com/api
-          EOF
-        - echo "Environment file contents:"
-        - cat .env
-        - echo "Starting build with environment variables:"
-        - printenv | grep REACT_APP
         - npm run build
-        - echo "Build complete. Contents of build directory:"
-        - ls -la build/
   artifacts:
     baseDirectory: frontend/build
     files:
