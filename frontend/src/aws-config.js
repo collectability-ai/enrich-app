@@ -1,39 +1,28 @@
 import { Amplify } from 'aws-amplify';
+import config from './config/config.testing';  // Import the testing config directly
 
-// Debug log all environment variables
-console.log('Environment Check:', {
-  ENVIRONMENT: process.env.REACT_APP_ENVIRONMENT || 'NOT SET',
-  REGION: process.env.REACT_APP_AWS_REGION || 'NOT SET',
-  USER_POOL_ID: process.env.REACT_APP_USER_POOL_ID || 'NOT SET',
-  USER_POOL_WEB_CLIENT_ID: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID || 'NOT SET',
-  IDENTITY_POOL_ID: process.env.REACT_APP_IDENTITY_POOL_ID || 'NOT SET',
-  AUTH_DOMAIN: process.env.REACT_APP_AUTH_DOMAIN || 'NOT SET',
-  REDIRECT_SIGN_IN: process.env.REACT_APP_REDIRECT_SIGN_IN || 'NOT SET',
-  REDIRECT_SIGN_OUT: process.env.REACT_APP_REDIRECT_SIGN_OUT || 'NOT SET',
-  COOKIE_DOMAIN: process.env.REACT_APP_COOKIE_DOMAIN || 'NOT SET'
-});
+console.log('Loading configuration:', config);
 
-// Create config object first so we can inspect it
 const awsConfig = {
   Auth: {
     mandatorySignIn: true,
-    region: process.env.REACT_APP_AWS_REGION,
-    userPoolId: process.env.REACT_APP_USER_POOL_ID,
-    userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
-    identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
+    region: config.aws.region,
+    userPoolId: config.aws.userPoolId,
+    userPoolWebClientId: config.aws.userPoolWebClientId,
+    identityPoolId: config.aws.identityPoolId,
     oauth: {
-      domain: process.env.REACT_APP_AUTH_DOMAIN,
+      domain: config.aws.authDomain,
       scope: ['email', 'openid', 'profile'],
-      redirectSignIn: process.env.REACT_APP_REDIRECT_SIGN_IN,
-      redirectSignOut: process.env.REACT_APP_REDIRECT_SIGN_OUT,
+      redirectSignIn: config.auth.redirectSignIn,
+      redirectSignOut: config.auth.redirectSignOut,
       responseType: 'code'
     },
     cookieStorage: {
-      domain: process.env.REACT_APP_COOKIE_DOMAIN,
+      domain: config.auth.cookieDomain,
       path: '/',
       expires: 365,
       sameSite: "strict",
-      secure: process.env.REACT_APP_ENVIRONMENT === 'production'
+      secure: config.environment === 'production'
     }
   }
 };
@@ -47,14 +36,6 @@ console.log('Auth Configuration:', {
   authDomain: awsConfig.Auth.oauth.domain,
   cookieDomain: awsConfig.Auth.cookieStorage.domain
 });
-
-// Check for missing required values before configuring
-if (!awsConfig.Auth.userPoolId || !awsConfig.Auth.userPoolWebClientId) {
-  console.error('Critical Auth Configuration Missing:', {
-    userPoolId: awsConfig.Auth.userPoolId ? 'SET' : 'MISSING',
-    userPoolWebClientId: awsConfig.Auth.userPoolWebClientId ? 'SET' : 'MISSING'
-  });
-}
 
 Amplify.configure(awsConfig);
 

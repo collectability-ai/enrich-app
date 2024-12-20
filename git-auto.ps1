@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.7.2"
-$description = "fixed amplify build paths - again"
+$version = "v1.7.3"
+$description = "test config"
 
 # Add all changes
 git add .
