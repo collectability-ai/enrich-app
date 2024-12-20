@@ -3,29 +3,22 @@ frontend:
   phases:
     preBuild:
       commands:
-        # Debug info
-        - echo "Node $(node --version)"
-        - echo "NPM $(npm --version)"
-        - echo "Starting in directory: $(pwd)"
+        - "echo \"Node $(node --version)\""
+        - "echo \"NPM $(npm --version)\""
+        - "echo \"Starting in directory: $(pwd)\""
         - ls -la
-        
-        # Change to frontend directory and install dependencies
         - cd frontend
-        - echo "Changed to frontend directory: $(pwd)"
+        - "echo \"Changed to frontend directory: $(pwd)\""
         - npm cache clean --force
         - npm install --legacy-peer-deps
-        
-        # Install backend dependencies if they exist
         - cd ..
-        - if [ -d "backend" ]; then cd backend && npm install --legacy-peer-deps && cd ..; fi
-
+        - "if [ -d \"backend\" ]; then cd backend && npm install --legacy-peer-deps && cd ..; fi"
     build:
       commands:
-        # Set build environment variables
-        - echo "Setting build environment..."
+        - "echo \"Setting build environment...\""
         - export CI=false
         - export GENERATE_SOURCEMAP=false
-        - export NODE_OPTIONS="--max-old-space-size=8192"
+        - "export NODE_OPTIONS=\"--max-old-space-size=8192\""
         - export REACT_APP_ENVIRONMENT=testing
         - export REACT_APP_API_BASE_URL=$API_BASE_URL
         - export REACT_APP_AWS_REGION=$AWS_REGION
@@ -35,42 +28,34 @@ frontend:
         - export REACT_APP_COGNITO_AUTHORITY=$COGNITO_AUTHORITY
         - export REACT_APP_COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
         - export REACT_APP_REDIRECT_URI=$REDIRECT_URI
-        
-        # Build frontend
-        - echo "Building frontend..."
+        - "echo \"Building frontend...\""
         - cd frontend
         - npm run build
-        
-        # Build backend if it exists
         - cd ..
-        - if [ -d "backend" ]; then
-        - cd backend
-        - mkdir -p dist
-        - npm run build
-        - cd ..
-        - fi
-        
-        # Debug build output
-        - echo "Build complete. Checking output..."
+        - |
+          if [ -d "backend" ]; then
+            cd backend
+            mkdir -p dist
+            npm run build
+            cd ..
+          fi
+        - "echo \"Build complete. Checking output...\""
         - cd frontend
         - ls -la build/
-
   artifacts:
     baseDirectory: frontend/build
     files:
-      - '**/*'
-      - ../backend/dist/**/*'
-
+      - "**/*"
+      - "../backend/dist/**/*"
   cache:
     paths:
       - frontend/node_modules/**/*
       - backend/node_modules/**/*
       - /root/.npm/**/*
-
   customHeaders:
-    - pattern: '**/*'
+    - pattern: "**/*"
       headers:
-        - key: 'Cache-Control'
-          value: 'public, max-age=31536000'
-        - key: 'Strict-Transport-Security'
-          value: 'max-age=31536000; includeSubDomains'
+        - key: "Cache-Control"
+          value: "public, max-age=31536000"
+        - key: "Strict-Transport-Security"
+          value: "max-age=31536000; includeSubDomains"
