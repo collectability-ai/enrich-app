@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node -r dotenv/config server.js",
-    "dev": "nodemon -r dotenv/config server.js",
+    "start": "node -r dotenv/config server.js dotenv_config_path=.env.development",
+    "dev": "nodemon -r dotenv/config server.js dotenv_config_path=.env.development",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "mkdir -p dist && cp server.js server-config.js package.json .env dist/ && cd dist && npm install --omit=dev"
   },

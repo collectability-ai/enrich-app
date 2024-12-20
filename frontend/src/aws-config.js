@@ -4,8 +4,8 @@ const awsConfig = {
   Auth: {
     Cognito: {
       region: process.env.REACT_APP_AWS_REGION,
-      userPoolId: process.env.REACT_APP_USER_POOL_ID,         // Changed from COGNITO_USER_POOL_ID
-      userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,  // Changed from COGNITO_APP_CLIENT_ID
+      userPoolId: process.env.REACT_APP_USER_POOL_ID,
+      userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
       identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
     },
     oauth: {
@@ -25,7 +25,16 @@ const awsConfig = {
   }
 };
 
-console.log("Amplify Config:", awsConfig); // We'll keep this debug log for now
+// Enhanced debugging logs to help with environment configuration
+console.log('AWS Amplify Configuration:', {
+  environment: process.env.REACT_APP_ENVIRONMENT,
+  stage: process.env.REACT_APP_STAGE,
+  region: process.env.REACT_APP_AWS_REGION,
+  userPoolId: process.env.REACT_APP_USER_POOL_ID,
+  userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
+  authDomain: process.env.REACT_APP_AUTH_DOMAIN,
+  cookieDomain: process.env.REACT_APP_COOKIE_DOMAIN
+});
 
 Amplify.configure(awsConfig);
 
