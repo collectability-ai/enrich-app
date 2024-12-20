@@ -1,7 +1,7 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.6.1"
+$version = "v1.6.2"
 $description = "enhanced yaml"
 
 # Add all changes

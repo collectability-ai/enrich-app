@@ -21,14 +21,22 @@ frontend:
         - npm cache clean --force
         - npm cache verify
         
-        # Install dependencies with error handling
+        # Install dependencies with error handling and legacy peer deps
         - echo "Installing dependencies..."
-        - npm install || (echo "npm install failed" && exit 1)
+        - npm install --legacy-peer-deps || (echo "npm install failed" && exit 1)
         
-        # Install specific dependencies with error handling
-        - echo "Installing specific dependencies..."
+        # Install AWS Amplify dependencies first
+        - echo "Installing AWS Amplify dependencies..."
         - |
-          npm install --save \
+          npm install --legacy-peer-deps \
+            aws-amplify@6.9.0 \
+            @aws-amplify/auth@6.8.0 \
+            @aws-amplify/ui-react@6.7.0 || (echo "AWS Amplify installation failed" && exit 1)
+        
+        # Install remaining dependencies
+        - echo "Installing remaining dependencies..."
+        - |
+          npm install --legacy-peer-deps \
             lucide-react@0.263.1 \
             react-oidc-context@3.2.0 \
             @babel/plugin-proposal-private-property-in-object@7.21.11 \
@@ -36,28 +44,25 @@ frontend:
             html2canvas@1.4.1 \
             clsx@2.1.0 \
             class-variance-authority@0.7.0 \
-            @aws-amplify/auth@6.8.0 \
-            @aws-amplify/ui-react@6.7.0 \
-            aws-amplify@6.0.0 \
             @radix-ui/react-alert-dialog@1.1.3 \
             @radix-ui/react-select@2.1.3 \
             @radix-ui/react-slot@1.1.1 \
             tailwind-merge@2.2.0 \
             @stripe/react-stripe-js@3.0.0 \
-            @stripe/stripe-js@5.2.0 || (echo "Specific dependencies installation failed" && exit 1)
+            @stripe/stripe-js@5.2.0 || (echo "Remaining dependencies installation failed" && exit 1)
         
         # Install global dependencies
         - npm install -g react-scripts
         
         # Install backend dependencies
         - echo "Installing backend dependencies..."
-        - cd backend && npm install || (echo "Backend dependencies installation failed" && exit 1)
+        - cd backend && npm install --legacy-peer-deps || (echo "Backend dependencies installation failed" && exit 1)
         - cd ..
         
         # Verify installations
         - echo "Verifying installations..."
-        - npm list react-oidc-context || true
-        - npm list lucide-react || true
+        - npm list aws-amplify || true
+        - npm list @aws-amplify/ui-react || true
 
     build:
       commands:
@@ -75,11 +80,7 @@ frontend:
         - echo "Building backend..."
         - cd backend
         - mkdir -p dist
-        - |
-          npm run build || (
-            echo "Backend build failed"
-            exit 1
-          )
+        - npm run build || (echo "Backend build failed" && exit 1)
         - cd ..
         
         # Verify build outputs
@@ -113,13 +114,3 @@ frontend:
           value: '1; mode=block'
         - key: 'X-Content-Type-Options'
           value: 'nosniff'
-        - key: 'Referrer-Policy'
-          value: 'strict-origin-when-cross-origin'
-    - pattern: '*.html'
-      headers:
-        - key: 'Cache-Control'
-          value: 'no-cache'
-    - pattern: 'service-worker.js'
-      headers:
-        - key: 'Cache-Control'
-          value: 'no-cache'
