@@ -8,19 +8,18 @@ import App from "./App";
 // Configure Amplify directly here instead of importing from aws-config
 const amplifyConfig = {
   Auth: {
-    region: process.env.REACT_APP_AWS_REGION,
-    userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID,
-    userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
-    identityPoolId: process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID,
-    loginWith: {
-      username: true,
-      email: true
+    Cognito: {  // Add Cognito wrapper
+      region: process.env.REACT_APP_AWS_REGION,
+      userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID,
+      userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,  // Changed to clientId
+      identityPoolId: process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID,
     },
+    // Remove loginWith
     oauth: {
       domain: process.env.REACT_APP_COGNITO_AUTHORITY,
       scope: ['email', 'openid', 'profile'],
-      redirectSignIn: process.env.REACT_APP_REDIRECT_SIGN_IN || process.env.REACT_APP_REDIRECT_URI,
-      redirectSignOut: process.env.REACT_APP_REDIRECT_SIGN_OUT || process.env.REACT_APP_REDIRECT_URI,
+      redirectSignIn: process.env.REACT_APP_REDIRECT_SIGN_IN || 'https://testing.contactvalidate.com/',
+      redirectSignOut: process.env.REACT_APP_REDIRECT_SIGN_OUT || 'https://testing.contactvalidate.com/',
       responseType: 'code'
     },
     cookieStorage: {
@@ -58,7 +57,7 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <App/>
     </BrowserRouter>
   </React.StrictMode>
 );
