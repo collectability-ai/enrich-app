@@ -3,18 +3,14 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory:"
-        - pwd
-        - echo "Directory contents:"
-        - ls -la
-        - echo "Parent directory contents:"
-        - cd .. && ls -la
-        - cd - && ls -la
-        - echo "Trying to find frontend directory..."
-        - find . -type d -name "frontend"
+        - cd frontend
+        - echo "Installing frontend dependencies"
+        - npm ci
     build:
       commands:
-        - echo "Skipping build for directory test"
+        - echo "Building frontend"
+        - mkdir -p build  # Ensure build directory exists
+        - npm run build
   artifacts:
     baseDirectory: frontend/build
     files:
@@ -27,10 +23,14 @@ backend:
   phases:
     preBuild:
       commands:
-        - echo "Skipping backend for directory test"
+        - cd backend
+        - echo "Installing backend dependencies"
+        - npm ci
     build:
       commands:
-        - echo "Skipping backend build for directory test"
+        - echo "Building backend"
+        - mkdir -p dist  # Ensure dist directory exists
+        - npm run build
   artifacts:
     baseDirectory: backend/dist
     files:
