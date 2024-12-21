@@ -56,22 +56,24 @@ const Signup = () => {
         : `+1${formData.phone.replace(/\D/g, '')}`;
 
       const signUpResult = await signUp({
-  username: formData.email,
-  password: formData.password,
-  options: {
-    userAttributes: {
-      email: formData.email,
-      phone_number: formattedPhone,
-      name: formData.name,
-      'custom:companyName': formData.companyName,
-      'custom:companyWebsite': formData.companyWebsite,
-      'custom:companyEIN': formData.companyEIN || '',
-      'custom:useCase': formData.useCase
-    },
-    autoSignIn: true
-  },
-  authority: process.env.REACT_APP_COGNITO_AUTHORITY,
-  clientId: process.env.REACT_APP_COGNITO_APP_CLIENT_ID
+        username: formData.email,
+        password: formData.password,
+        options: {
+          userAttributes: {
+            email: formData.email,
+            phone_number: formattedPhone,
+            name: formData.name,
+            'custom:companyName': formData.companyName,
+            'custom:companyWebsite': formData.companyWebsite,
+            'custom:companyEIN': formData.companyEIN || '',
+            'custom:useCase': formData.useCase
+          },
+          autoSignIn: true
+        },
+        clientMetadata: {
+          authority: process.env.REACT_APP_COGNITO_AUTHORITY,
+          clientId: process.env.REACT_APP_COGNITO_APP_CLIENT_ID
+        }
       });
 
       console.log('Sign up success:', signUpResult);

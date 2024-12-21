@@ -1,12 +1,41 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signIn } from 'aws-amplify/auth';
+import { Amplify } from 'aws-amplify';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Configure Amplify directly here to ensure environment variables are used
+  const amplifyConfig = {
+    Auth: {
+      region: process.env.REACT_APP_AWS_REGION,
+      userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID,
+      userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
+      identityPoolId: process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID,
+      oauth: {
+        domain: process.env.REACT_APP_COGNITO_AUTHORITY,
+        scope: ['email', 'openid', 'profile'],
+        redirectSignIn: process.env.REACT_APP_REDIRECT_URI,
+        redirectSignOut: process.env.REACT_APP_REDIRECT_URI,
+        responseType: 'code',
+      },
+      cookieStorage: {
+        domain: process.env.REACT_APP_COOKIE_DOMAIN,
+        path: '/',
+        expires: 365,
+        sameSite: "strict",
+        secure: process.env.REACT_APP_ENVIRONMENT === 'production',
+      }
+    }
+  };
+
+  Amplify.configure(amplifyConfig);
+
+  console.log('Amplify Config:', amplifyConfig);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,15 +45,15 @@ const Login = () => {
       console.error('Error during sign in:', error);
       
       // Handling different error scenarios
-  if (error.message.includes('User does not exist')) {
-    setError('No account found with this email address. Need an account? Sign up now.');
-  } else if (error.message.includes('Incorrect username or password')) {
-    setError('Incorrect password');
-    setShowForgotPassword(true);
-  } else {
-    setError('An error occurred. Please try again.');
-  }
-}
+      if (error.message.includes('User does not exist')) {
+        setError('No account found with this email address. Need an account? Sign up now.');
+      } else if (error.message.includes('Incorrect username or password')) {
+        setError('Incorrect password');
+        setShowForgotPassword(true);
+      } else {
+        setError('An error occurred. Please try again.');
+      }
+    }
   };
 
   return (
