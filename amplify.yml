@@ -3,12 +3,13 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory $(pwd)"
-        - ls -la  # This will help us debug directory contents
-        - cd frontend || exit 1  # Added error handling
-        - echo "Frontend directory contents:"
+        - pwd
         - ls -la
-        - npm ci
+        - cd frontend
+        - pwd
+        - ls -la
+        - echo "Installing frontend dependencies"
+        - npm ci --legacy-peer-deps
     build:
       commands:
         - npm run build
@@ -24,11 +25,7 @@ backend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory $(pwd)"
-        - ls -la
-        - cd backend || exit 1  # Added error handling
-        - echo "Backend directory contents:"
-        - ls -la
+        - cd backend
         - npm ci
     build:
       commands:
@@ -40,26 +37,3 @@ backend:
   cache:
     paths:
       - backend/node_modules/**/*
-  env:
-    variables:
-      NODE_ENV: testing
-      AWS_REGION: ${AWS_REGION}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      API_KEY: ${API_KEY}
-      API_ENDPOINT: ${API_ENDPOINT}
-      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
-      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID}
-      STRIPE_TEST_SECRET_KEY: ${STRIPE_TEST_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-
-env:
-  variables:
-    REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}
-    REACT_APP_AWS_REGION: ${REACT_APP_AWS_REGION}
-    REACT_APP_COGNITO_IDENTITY_POOL_ID: ${REACT_APP_COGNITO_IDENTITY_POOL_ID}
-    REACT_APP_COGNITO_USER_POOL_ID: ${REACT_APP_COGNITO_USER_POOL_ID}
-    REACT_APP_USER_POOL_WEB_CLIENT_ID: ${REACT_APP_USER_POOL_WEB_CLIENT_ID}
-    REACT_APP_COGNITO_AUTHORITY: ${REACT_APP_COGNITO_AUTHORITY}
-    REACT_APP_REDIRECT_URI: ${REACT_APP_REDIRECT_URI}
-    REACT_APP_COOKIE_DOMAIN: ${REACT_APP_COOKIE_DOMAIN}
