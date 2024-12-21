@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Auth } from 'aws-amplify';
+import { signIn } from 'aws-amplify/auth';  // Changed this import
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,12 +12,11 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await Auth.signIn(email, password);
+      await signIn({ username: email, password });  // Changed to match working version
       navigate('/dashboard');
     } catch (error) {
       console.error('Error during sign in:', error);
       
-      // Handling different error scenarios
       if (error.message.includes('User does not exist')) {
         setError('No account found with this email address. Need an account? Sign up now.');
       } else if (error.message.includes('Incorrect username or password')) {
