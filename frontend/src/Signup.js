@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { signUp } from 'aws-amplify/auth';
 import { useNavigate } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
@@ -79,10 +79,6 @@ const Signup = () => {
             'custom:useCase': formData.useCase
           },
           autoSignIn: true
-        },
-        clientMetadata: {
-          authority: process.env.REACT_APP_COGNITO_AUTHORITY,
-          clientId: process.env.REACT_APP_COGNITO_APP_CLIENT_ID
         }
       });
 
