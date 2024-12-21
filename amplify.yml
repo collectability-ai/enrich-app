@@ -3,7 +3,11 @@ frontend:
   phases:
     preBuild:
       commands:
-        - cd frontend
+        - echo "Current directory $(pwd)"
+        - ls -la  # This will help us debug directory contents
+        - cd frontend || exit 1  # Added error handling
+        - echo "Frontend directory contents:"
+        - ls -la
         - npm ci
     build:
       commands:
@@ -20,7 +24,11 @@ backend:
   phases:
     preBuild:
       commands:
-        - cd backend
+        - echo "Current directory $(pwd)"
+        - ls -la
+        - cd backend || exit 1  # Added error handling
+        - echo "Backend directory contents:"
+        - ls -la
         - npm ci
     build:
       commands:
