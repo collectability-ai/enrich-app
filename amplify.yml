@@ -3,38 +3,50 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "Current directory $(pwd)"
+        - echo "Listing directory contents" && ls -la
         - cd frontend
-        - echo "Installing frontend dependencies"
         - npm ci
+        - npm install -g react-scripts
+        - cd ../backend 
+        - npm ci
+        - cd ../frontend
     build:
       commands:
         - echo "Building frontend"
-        - mkdir -p build  # Ensure build directory exists
+        - CI=false npm run build
+        - cd ../backend
+        - echo "Building backend"
         - npm run build
   artifacts:
     baseDirectory: frontend/build
     files:
       - '**/*'
+      - '../backend/dist/**/*'
   cache:
     paths:
       - frontend/node_modules/**/*
-
-backend:
-  phases:
-    preBuild:
-      commands:
-        - cd backend
-        - echo "Installing backend dependencies"
-        - npm ci
-    build:
-      commands:
-        - echo "Building backend"
-        - mkdir -p dist  # Ensure dist directory exists
-        - npm run build
-  artifacts:
-    baseDirectory: backend/dist
-    files:
-      - '**/*'
-  cache:
-    paths:
       - backend/node_modules/**/*
+      - /root/.npm/**/*
+  customHeaders:
+    - pattern: '/api/*'
+      headers:
+        - key: 'Cache-Control'
+          value: 'no-store'
+    - pattern: '**/*'
+      headers:
+        - key: 'Strict-Transport-Security'
+          value: 'max-age=31536000; includeSubDomains'
+        - key: 'X-Frame-Options'
+          value: 'SAMEORIGIN'
+        - key: 'X-XSS-Protection'
+          value: '1; mode=block'
+        - key: 'X-Content-Type-Options'
+          value: 'nosniff'
+  rewrites:
+    - source: '/api/*'
+      target: '/index.js'
+      status: '200'
+    - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/'
+      target: '/index.html'
+      status: '200'
