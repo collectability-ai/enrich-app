@@ -11,6 +11,8 @@ const {
   SEARCH_HISTORY_TABLE,
 } = require("./server-config");
 
+const path = require("path");
+
 const {
   DynamoDBDocumentClient,
   GetCommand,
@@ -735,7 +737,7 @@ app.post("/get-purchase-history", async (req, res) => {
 });
 
 // Route: Check or Fetch Credits
-app.post("/check-credits", async (req, res) => {
+app.post("/api/check-credits", async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -746,7 +748,7 @@ app.post("/check-credits", async (req, res) => {
     const credits = await getUserCredits(email);
     res.status(200).json({ email, credits });
   } catch (err) {
-    logger.error("Error checking credits:", err);
+    console.error("Error checking credits:", err);
     res.status(500).json({ error: "Failed to fetch credits" });
   }
 });
@@ -1187,17 +1189,36 @@ app.get("/auth/validate", (req, res) => {
   });
 });
 
+// Static Files Middleware
 if (process.env.NODE_ENV === 'production') {
-    app.get('*', (req, res) => {
-        const indexPath = path.join(__dirname, '..', 'build', 'index.html');
-        logger.info(`Serving index.html for path: ${req.path}`);
-        res.sendFile(indexPath, err => {
-            if (err) {
-                logger.error('Error serving index.html:', err);
-                res.status(500).send('Error loading application');
-            }
-        });
+  const buildPath = path.join(__dirname, '..', 'build');
+  logger.info(`Serving static files from: ${buildPath}`);
+
+  const fs = require('fs');
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+  } else {
+    logger.error(`Build directory not found: ${buildPath}`);
+  }
+}
+
+// React Fallback Middleware
+// Exclude API routes from being served by the React app
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      // Skip React fallback for API routes
+      return next();
+    }
+
+    const indexPath = path.join(__dirname, '..', 'build', 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        logger.error('Error serving index.html:', err);
+        res.status(500).send('Error loading application');
+      }
     });
+  });
 }
 
 // Start the server
