@@ -8,7 +8,7 @@ const CreditsRemaining = ({ userEmail }) => {
   useEffect(() => {
     const fetchCredits = async () => {
       try {
-        const response = await axios.post("http://localhost:5000/check-credits", {
+        const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/check-credits`, {
           email: userEmail,
         });
         setRemainingCredits(response.data.credits || 0);
