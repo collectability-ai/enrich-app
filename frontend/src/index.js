@@ -12,11 +12,15 @@ const amplifyConfig = {
     userPoolId: process.env.REACT_APP_COGNITO_USER_POOL_ID,
     userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
     identityPoolId: process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID,
+    loginWith: {
+      username: true,
+      email: true
+    },
     oauth: {
       domain: process.env.REACT_APP_COGNITO_AUTHORITY,
       scope: ['email', 'openid', 'profile'],
-      redirectSignIn: process.env.REACT_APP_REDIRECT_URI,
-      redirectSignOut: process.env.REACT_APP_REDIRECT_URI,
+      redirectSignIn: process.env.REACT_APP_REDIRECT_SIGN_IN || process.env.REACT_APP_REDIRECT_URI,
+      redirectSignOut: process.env.REACT_APP_REDIRECT_SIGN_OUT || process.env.REACT_APP_REDIRECT_URI,
       responseType: 'code'
     },
     cookieStorage: {
@@ -31,13 +35,16 @@ const amplifyConfig = {
 
 // Debug logs - these will help identify if environment variables are properly set
 console.log('Environment:', process.env.REACT_APP_ENVIRONMENT);
-console.log('Region:', process.env.REACT_APP_AWS_REGION); // Specific debug log
-console.log('User Pool ID:', process.env.REACT_APP_COGNITO_USER_POOL_ID); // Specific debug log
-console.log('User Pool Web Client ID:', process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID); // Specific debug log
-console.log('Identity Pool ID:', process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID); // Specific debug log
-console.log('Auth Domain:', process.env.REACT_APP_COGNITO_AUTHORITY); // Specific debug log
-console.log('Redirect URI:', process.env.REACT_APP_REDIRECT_URI); // Specific debug log
-console.log('Cookie Domain:', process.env.REACT_APP_COOKIE_DOMAIN); // Specific debug log
+console.log('Region:', process.env.REACT_APP_AWS_REGION);
+console.log('User Pool ID:', process.env.REACT_APP_COGNITO_USER_POOL_ID);
+console.log('User Pool Web Client ID:', process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID);
+console.log('Identity Pool ID:', process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID);
+console.log('Auth Domain:', process.env.REACT_APP_COGNITO_AUTHORITY);
+console.log('Redirect Sign In:', process.env.REACT_APP_REDIRECT_SIGN_IN);
+console.log('Redirect Sign Out:', process.env.REACT_APP_REDIRECT_SIGN_OUT);
+console.log('Redirect URI:', process.env.REACT_APP_REDIRECT_URI);
+console.log('Cookie Domain:', process.env.REACT_APP_COOKIE_DOMAIN);
+console.log('Full Amplify Config:', amplifyConfig);
 
 Amplify.configure(amplifyConfig);
 
