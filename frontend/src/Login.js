@@ -1,32 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { signIn } from 'aws-amplify/auth';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Auth } from 'aws-amplify';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-
-  // Verify environment variables
-  useEffect(() => {
-    console.log('Login.js Environment:', process.env.REACT_APP_ENVIRONMENT);
-    console.log('Login.js Region:', process.env.REACT_APP_AWS_REGION);
-    console.log('Login.js User Pool ID:', process.env.REACT_APP_COGNITO_USER_POOL_ID);
-    console.log('Login.js User Pool Web Client ID:', process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID);
-    console.log('Login.js Identity Pool ID:', process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID);
-    console.log('Login.js Auth Domain:', process.env.REACT_APP_COGNITO_AUTHORITY);
-    console.log('Login.js Redirect URI:', process.env.REACT_APP_REDIRECT_URI);
-    console.log('Login.js Cookie Domain:', process.env.REACT_APP_COOKIE_DOMAIN);
-  }, []);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await signIn({ username: email, password });
+      await Auth.signIn(email, password);
+      navigate('/dashboard');
     } catch (error) {
       console.error('Error during sign in:', error);
       
+      // Handling different error scenarios
       if (error.message.includes('User does not exist')) {
         setError('No account found with this email address. Need an account? Sign up now.');
       } else if (error.message.includes('Incorrect username or password')) {
@@ -40,6 +31,7 @@ const Login = () => {
 
   return (
     <div className="auth-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Main Login Form */}
       <div style={{
         backgroundColor: 'white',
         padding: '2rem',
@@ -122,6 +114,7 @@ const Login = () => {
         </form>
       </div>
 
+      {/* Sign Up Link */}
       <div style={{
         textAlign: 'center',
         marginTop: '1rem',
