@@ -3,12 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Current directory $(pwd)"
-        - echo "Listing directory contents" && ls -la
         - cd frontend
         - npm ci
         - npm install -g react-scripts
-        - cd ../backend 
+        - cd ../backend
         - npm ci
         - cd ../frontend
     build:
@@ -17,7 +15,9 @@ frontend:
         - CI=false npm run build
         - cd ../backend
         - echo "Building backend"
-        - npm run build
+        - mkdir -p dist
+        - cp server.js server-config.js package.json dist/
+        - cd dist && npm install --omit=dev
   artifacts:
     baseDirectory: frontend/build
     files:
@@ -28,25 +28,10 @@ frontend:
       - frontend/node_modules/**/*
       - backend/node_modules/**/*
       - /root/.npm/**/*
-  customHeaders:
-    - pattern: '/api/*'
-      headers:
-        - key: 'Cache-Control'
-          value: 'no-store'
-    - pattern: '**/*'
-      headers:
-        - key: 'Strict-Transport-Security'
-          value: 'max-age=31536000; includeSubDomains'
-        - key: 'X-Frame-Options'
-          value: 'SAMEORIGIN'
-        - key: 'X-XSS-Protection'
-          value: '1; mode=block'
-        - key: 'X-Content-Type-Options'
-          value: 'nosniff'
-  rewrites:
+  customRules:
     - source: '/api/*'
-      target: '/index.js'
+      target: '/backend/dist/server.js'
       status: '200'
-    - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/'
+    - source: '/*'
       target: '/index.html'
       status: '200'
