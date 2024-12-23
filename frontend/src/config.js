@@ -28,4 +28,22 @@ const config = {
   STAGE: process.env.REACT_APP_STAGE || 'dev'
 };
 
+// Debug Logging for Environment Variables
+console.log("Environment Variables Debug:", {
+  API_BASE_URL: config.API_BASE_URL,
+  API_ENDPOINT: config.API_ENDPOINT,
+  AWS_REGION: config.AWS_REGION,
+  USER_POOL_ID: config.USER_POOL_ID,
+  USER_POOL_WEB_CLIENT_ID: config.USER_POOL_WEB_CLIENT_ID,
+  IDENTITY_POOL_ID: config.IDENTITY_POOL_ID,
+  AUTH_DOMAIN: config.AUTH_DOMAIN,
+  REDIRECT_SIGN_IN: config.REDIRECT_SIGN_IN,
+  REDIRECT_SIGN_OUT: config.REDIRECT_SIGN_OUT,
+  STRIPE_PUBLIC_KEY: config.STRIPE_PUBLIC_KEY,
+  SESSION_EMAIL_KEY: config.SESSION_EMAIL_KEY,
+  COOKIE_DOMAIN: config.COOKIE_DOMAIN,
+  ENVIRONMENT: config.ENVIRONMENT,
+  STAGE: config.STAGE,
+});
+
 export default config;

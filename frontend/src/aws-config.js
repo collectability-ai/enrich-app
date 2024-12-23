@@ -28,6 +28,8 @@ const awsConfig = {
 };
 
 console.log("Amplify Config:", awsConfig);
+console.log("AWS Config Variables:", config);
+console.log("Amplify Config Object:", awsConfig);
 
 Amplify.configure(awsConfig);
 
