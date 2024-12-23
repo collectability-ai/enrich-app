@@ -1,0 +1,114 @@
+[33m261f552[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelopment[m[33m, [m[1;33mtag: [m[1;33mv1.8.4-restore[m[33m, [m[1;31morigin/development[m[33m)[m v1.8.4-restore: Restore point: fixed signup and login issues, centralized Amplify configuration
+[33m8d5466b[m[33m ([m[1;33mtag: [m[1;33mv1.8.3[m[33m)[m v1.8.3: update api routes in server file v2
+[33m4aef3e8[m[33m ([m[1;33mtag: [m[1;33mv1.8.2[m[33m)[m v1.8.2: update api routes in server file
+[33md86cdf1[m Update CreditsRemaining.js
+[33m84aa33e[m Update amplify.yml v9
+[33m82bbfac[m Update amplify.yml
+[33m7c80de7[m Update amplify.yml
+[33ma8c492d[m Update amplify.yml
+[33mc71dc2d[m Update amplify.yml
+[33m3e6af7e[m v1.8.1: updated signup and login
+[33m8a4c734[m v1.8.1: updated signup and login
+[33m962568e[m v1.8.1: updated signup and login
+[33m3782ee9[m v1.8.1: updated signup and login
+[33m58f484b[m v1.8.1: updated signup and login
+[33mbb3af8e[m v1.8.1: updated signup and login
+[33m5270f25[m[33m ([m[1;33mtag: [m[1;33mv1.8.1[m[33m)[m v1.8.1: updated signup and login
+[33m5f8f9d2[m v1.8.0: updated signup and login
+[33m8b3316f[m[33m ([m[1;33mtag: [m[1;33mv1.8.0[m[33m)[m v1.8.0: updated signup and login
+[33m8da40ae[m[33m ([m[1;33mtag: [m[1;33mv1.7.9[m[33m)[m v1.7.9: updated signup and login
+[33m3d377bc[m[33m ([m[1;33mtag: [m[1;33mv1.7.8[m[33m)[m v1.7.8: updated signup and login
+[33m9626984[m v1.7.7: test react app variables
+[33m428f6d5[m[33m ([m[1;33mtag: [m[1;33mv1.7.7[m[33m)[m v1.7.7: test react app variables
+[33ma91e94f[m[33m ([m[1;33mtag: [m[1;33mv1.7.6[m[33m)[m v1.7.6: redo react app variables
+[33m27e4ef0[m[33m ([m[1;33mtag: [m[1;33mv1.7.5[m[33m)[m v1.7.5: redo react app variables
+[33m1682a51[m[33m ([m[1;33mtag: [m[1;33mv1.7.4[m[33m)[m v1.7.4: test config file 2
+[33md929d51[m[33m ([m[1;33mtag: [m[1;33mv1.7.3[m[33m)[m v1.7.3: test config
+[33m402a4be[m[33m ([m[1;33mtag: [m[1;33mv1.7.2[m[33m)[m v1.7.2: fixed amplify build paths - again
+[33ma385050[m[33m ([m[1;33mtag: [m[1;33mv1.7.1[m[33m)[m v1.7.1: fixed amplify build paths
+[33m54ae26f[m[33m ([m[1;33mtag: [m[1;33mv1.7.0[m[33m)[m v1.7.0: fixed aws-config and auth
+[33m309428a[m[33m ([m[1;33mtag: [m[1;33mv1.6.9[m[33m)[m v1.6.9: fixed aws-config
+[33m01c1262[m[33m ([m[1;33mtag: [m[1;33mv1.6.8[m[33m)[m v1.6.8: added amplify install
+[33m6b375ff[m[33m ([m[1;33mtag: [m[1;33mv1.6.7[m[33m)[m v1.6.7: fixed incorrect env naming. rebuilt frontend.
+[33me5d5bfd[m[33m ([m[1;33mtag: [m[1;33mv1.6.6[m[33m)[m v1.6.6: updated env routes and tested working on local
+[33mad5d56f[m[33m ([m[1;33mtag: [m[1;33mv1.6.5[m[33m)[m v1.6.5: fixed yaml
+[33mb76421a[m[33m ([m[1;33mtag: [m[1;33mv1.6.4[m[33m)[m v1.6.4: fixed yaml
+[33ma8276fb[m[33m ([m[1;33mtag: [m[1;33mv1.6.3[m[33m)[m v1.6.3: fixed package and yaml
+[33m2dfc0e9[m[33m ([m[1;33mtag: [m[1;33mv1.6.2[m[33m)[m v1.6.2: enhanced yaml
+[33mf5a84e4[m[33m ([m[1;33mtag: [m[1;33mv1.6.1[m[33m)[m v1.6.1: enhanced yaml
+[33m892f0cb[m[33m ([m[1;33mtag: [m[1;33mv1.6.0[m[33m)[m v1.6.0: added jspdf install
+[33mbc5a080[m[33m ([m[1;33mtag: [m[1;33mv1.5.9[m[33m)[m v1.5.9: added oidc install
+[33md7d0e96[m[33m ([m[1;33mtag: [m[1;33mv1.5.8[m[33m)[m v1.5.8: added lucide install
+[33ma5a6490[m[33m ([m[1;33mtag: [m[1;33mv1.5.7[m[33m)[m v1.5.7: yaml update
+[33ma276d60[m[33m ([m[1;33mtag: [m[1;33mv1.5.6[m[33m)[m v1.5.6: package update
+[33mc4fb856[m[33m ([m[1;33mtag: [m[1;33mv1.5.5[m[33m)[m v1.5.5: directory tree update
+[33m0f1e3e0[m[33m ([m[1;33mtag: [m[1;33mv1.5.4[m[33m)[m v1.5.4: node version update
+[33m770f323[m[33m ([m[1;33mtag: [m[1;33mv1.5.3[m[33m)[m v1.5.3: node version update
+[33m2b6e0de[m[33m ([m[1;33mtag: [m[1;33mv1.5.2[m[33m)[m v1.5.2: file restructure - local test works
+[33mc0cd724[m[33m ([m[1;33mtag: [m[1;33mv1.5.1[m[33m)[m v1.5.1: file restructure - local test works
+[33mff18216[m Remove sensitive files from Git tracking
+[33m334db89[m[33m ([m[1;33mtag: [m[1;33mv1.5.0[m[33m)[m v1.5.0: additional build fixes - add variables
+[33m53db291[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.9[m[33m)[m v1.4.9.9: additional build fixes - amplify rewrite
+[33m5c54aea[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.8[m[33m)[m v1.4.9.8: additional build fixes - amplify rewrite
+[33m0c41232[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.7[m[33m)[m v1.4.9.7: additional build fixes - amplify rewrite
+[33m60473ba[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.6[m[33m)[m v1.4.9.6: additional build fixes - packagelock rewrite
+[33m9321831[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.5[m[33m)[m v1.4.9.5: additional build fixes
+[33m781af9c[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.4[m[33m)[m v1.4.9.4: additional build fixes
+[33m2334e76[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.3[m[33m)[m v1.4.9.3: additional build fixes
+[33mbb10516[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.2[m[33m)[m v1.4.9.2: additional build updates
+[33mf42387b[m[33m ([m[1;33mtag: [m[1;33mv1.4.9.1[m[33m)[m v1.4.9.1: added build path debug
+[33m8430a00[m[33m ([m[1;33mtag: [m[1;33mv1.4.9[m[33m)[m v1.4.9: added build path debug
+[33mdd6e00a[m[33m ([m[1;33mtag: [m[1;33mv1.4.8[m[33m)[m v1.4.8: added build path debug
+[33md0eee37[m[33m ([m[1;33mtag: [m[1;33mv1.4.7[m[33m)[m v1.4.7: updated frontend file path again
+[33m3414100[m[33m ([m[1;33mtag: [m[1;33mv1.4.6[m[33m)[m v1.4.6: updated frontend file path
+[33m6f1fe4c[m[33m ([m[1;33mtag: [m[1;33mv1.4.5[m[33m)[m v1.4.5: updated frontend file path
+[33m9fa659c[m[33m ([m[1;33mtag: [m[1;33mv1.4.4[m[33m)[m v1.4.4: updated node.js install
+[33m7fc61d6[m[33m ([m[1;33mtag: [m[1;33mv1.4.3[m[33m)[m v1.4.3: simplify amplify paths
+[33m34161dd[m[33m ([m[1;33mtag: [m[1;33mv1.4.2[m[33m)[m v1.4.2: fixed amplify paths
+[33m375ce43[m[33m ([m[1;33mtag: [m[1;33mv1.4.1[m[33m)[m v1.4.1: fixed amplify paths
+[33m9ecbb9b[m[33m ([m[1;33mtag: [m[1;33mv1.4.0[m[33m)[m v1.4.0: updated routes. removed duplicate files and code. updated directory structure
+[33mfc7549d[m[33m ([m[1;33mtag: [m[1;33mv1.3.9[m[33m)[m v1.3.9: updated to linux package.json
+[33m0a801c4[m v1.3.8: Used Amplify Build code
+[33m9b70d60[m[33m ([m[1;33mtag: [m[1;33mv1.3.8[m[33m)[m v1.3.8: Used Amplify Build code
+[33mc784fc9[m[33m ([m[1;33mtag: [m[1;33mv1.3.7[m[33m)[m v1.3.7: Fixed build configuration for Amplify deployment
+[33mcd75d83[m[33m ([m[1;33mtag: [m[1;33mv1.3.6[m[33m)[m v1.3.6: Update build configuration for Amplify deployment
+[33m0169220[m[33m ([m[1;33mtag: [m[1;33mv1.3.5[m[33m)[m v1.3.5: v1 updated deployment
+[33m8daec7b[m[33m ([m[1;33mtag: [m[1;33mv1.3.4[m[33m)[m v1.3.4: updated amplify build scripts for testing
+[33m252f9ec[m[33m ([m[1;33mtag: [m[1;33mv1.3.3[m[33m)[m v1.3.3: updated amplify build scripts
+[33m8e44ea6[m v1.3.2: fixed search and payment routes - removed useless json file
+[33m4597cd5[m v1.3.1: fixed search and payment routes
+[33mecedd1c[m v1.3.1: fixed search and payment routes
+[33ma203d69[m v1.3.1: fixed search and payment routes
+[33mf9fcc79[m[33m ([m[1;33mtag: [m[1;33mv1.3.0[m[33m)[m v1.3.0: updated env files and dynamicURLS
+[33m49e2120[m Set up testing environment with updated .env files and backend changes
+[33m79d7754[m[33m ([m[1;33mtag: [m[1;33mv1.2.9[m[33m, [m[1;33mtag: [m[1;33mv1.0-localhost[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m v1.2.9:
+[33m41abfad[m[33m ([m[1;33mtag: [m[1;33mv1.2.8[m[33m)[m v1.2.8:
+[33mc257669[m[33m ([m[1;33mtag: [m[1;33mv1.2.7[m[33m)[m v1.2.7:
+[33m9911b45[m[33m ([m[1;33mtag: [m[1;33mv1.2.6[m[33m)[m v1.2.6:
+[33m4ded48d[m[33m ([m[1;33mtag: [m[1;33mv1.2.5[m[33m)[m v1.2.5: Updated UI of Search Response page. Fixed PDF export.
+[33maf6e985[m[33m ([m[1;33mtag: [m[1;33mv1.2.4[m[33m)[m v1.2.4: Cognito Signup and Login fully functional. Added Dashboard enhancements and AWS Activate.
+[33m380f28f[m[33m ([m[1;33mtag: [m[1;33mv1.2.3[m[33m)[m v1.2.3: Updated Purchase Credits page
+[33m7b3b7d5[m[33m ([m[1;33mtag: [m[1;33mv1.2.2[m[33m)[m v1.2.2: Cleaned Git. Updated Dashboard. Added 50 credit quick buy..
+[33mf7ee787[m Update .gitignore to exclude sensitive and unnecessary files
+[33m2c88fd3[m Updated .gitignore
+[33mf6f252f[m Added backend.log to .gitignore
+[33mdb2fe2d[m Add backend log to .gitignore
+[33md6c3eee[m v1.2.1: Updated Dashboard. Added 50 credit quick buy..
+[33m52fdd22[m[33m ([m[1;33mtag: [m[1;33mv1.2.1[m[33m)[m v1.2.1: Updated Dashboard. Added 50 credit quick buy..
+[33m0e3a05f[m[33m ([m[1;33mtag: [m[1;33mv1.1.6[m[33m)[m v1.1.6: Integrated Cognito. Rebuilt base functionality.
+[33mc0aadd7[m[33m ([m[1;33mtag: [m[1;33mv1.2.0[m[33m)[m v1.2.0: Integrated Cognito. Rebuilt base functionality.
+[33m5fe259e[m[33m ([m[1;33mtag: [m[1;33mv1.1.2[m[33m)[m v1.1.2: added x-api-key requirement to call api from app
+[33mf222e13[m v1.1.0: updated backend to call new v2 endpoint, break down product types, and implement new credit pricing plans.
+[33mf15d445[m[33m ([m[1;33mtag: [m[1;33mv1.1.0[m[33m)[m v1.1.0: updated backend to call new v2 endpoint, break down product types, and implement new credit pricing plans.
+[33m2e4d1ef[m v1.0.9: Added functionality to export Search History to CSV.
+[33mcd8d19b[m[33m ([m[1;33mtag: [m[1;33mv1.0.9[m[33m)[m v1.0.9: Added functionality to export Search History to CSV.
+[33m06d3b35[m[33m ([m[1;33mtag: [m[1;33mv1.0.8[m[33m)[m v1.0.8: Fixed CLOSE button behavior on search result popup.
+[33m58b793c[m[33m ([m[1;33mtag: [m[1;33mv1.0.7[m[33m)[m v1.0.7: Search History and pop up complete. Dasbboard page created.
+[33m53ff0ed[m[33m ([m[1;33mtag: [m[1;33mv1.0.6[m[33m)[m v1.0.6: SearchLog operations fixed. Searches work. App is functional.
+[33m9ec8837[m[33m ([m[1;33mtag: [m[1;33mv1.0.5[m[33m)[m v1.0.5: SearchLog operations minus raw api response field. This functional build posted as a restore point
+[33mc5344ea[m Add exported chat files for project documentation
+[33mdea7ae4[m[33m ([m[1;33mtag: [m[1;33mv1.0.4[m[33m)[m v1.0.4: Added search credit logging in external database. Search and purchase fully functional
+[33ma17ac77[m[33m ([m[1;33mtag: [m[1;33mv1.0.3[m[33m)[m v1.0.3: Front end fully functional. Search successful - results returned.
+[33m3e9a71c[m[33m ([m[1;33mtag: [m[1;33mv1.0.2[m[33m)[m v1.0.2: Stable Backend with frontend credit purchase verified for logged in user
+[33m377f576[m[33m ([m[1;33mtag: [m[1;33mv1.0.1[m[33m)[m Clean version with .env setup and secure API key handling
+[33m57651e3[m[33m ([m[1;33mtag: [m[1;33mv1.0-working-app[m[33m)[m Initial commit of working app with login, form, API integration

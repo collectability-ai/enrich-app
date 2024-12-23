@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.8.4-restore"
-$description = "Restore point: fixed signup and login issues, centralized Amplify configuration"
+$version = "v1.8.5"
+$description = "Restore point: fixed signup and login issues, centralized Amplify configuration, fixed get credits route"
 
 # Add all changes
 git add .
@@ -11,7 +11,7 @@ git add .
 git commit -m "${version}: ${description}"
 
 # Tag the commit with the version number
-git tag -a $version -m "Restore point ${version}: ${description}"
+git tag -a $version -m "Release ${version}: ${description}"
 
 # Push the commit and tag to the development branch
 git push origin development

@@ -737,7 +737,7 @@ app.post("/get-purchase-history", async (req, res) => {
 });
 
 // Route: Check or Fetch Credits
-app.post("/api/check-credits", async (req, res) => {
+app.post("/check-credits", async (req, res) => {
   console.log("Check Credits endpoint hit");
   const { email } = req.body;
 
