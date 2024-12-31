@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.8.6"
-$description = "Added frontend build. Updated backend for Lambda. Localhost fully functional."
+$version = "v1.8.7"
+$description = "Updated backend dynamic variables for Lambda. Localhost fully functional."
 
 # Add all changes
 git add .

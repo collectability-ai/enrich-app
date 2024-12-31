@@ -1,95 +1,100 @@
-// Load environment variables first
+// Import required modules (Remove duplicates)
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+const winston = require('winston');
+const { CognitoIdentityProviderClient, SignUpCommand, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { SignatureV4 } = require('@aws-sdk/signature-v4');
+const { fromEnv } = require('@aws-sdk/credential-providers');
+const { Sha256 } = require('@aws-crypto/sha256-js');
+const { HttpRequest } = require('@aws-sdk/protocol-http');
+const axios = require('axios');
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+require("dotenv").config();
+
+// Load environment variables dynamically based on NODE_ENV
 require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || 'development'}`,
+  path: `.env.${process.env.NODE_ENV || "development"}`,
 });
 
-// First define the validation function
+// Determine the environment dynamically
+const isProduction = process.env.NODE_ENV === "production";
+
+// Dynamically assign environment-specific variables
+process.env.FRONTEND_URL = isProduction
+  ? process.env.FRONTEND_URL
+  : process.env.FRONTEND_URL || "http://localhost:3000";
+
+process.env.API_ENDPOINT = isProduction
+  ? process.env.API_ENDPOINT
+  : process.env.API_ENDPOINT;
+
+process.env.STRIPE_SECRET_KEY = isProduction
+  ? process.env.STRIPE_LIVE_SECRET_KEY
+  : process.env.STRIPE_TEST_SECRET_KEY;
+
+// Debugging log
+console.log("Environment Configuration:");
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`Environment: ${isProduction ? "production" : "testing/development"}`);
+console.log(`FRONTEND_URL: ${process.env.FRONTEND_URL}`);
+console.log(`API_ENDPOINT: ${process.env.API_ENDPOINT}`);
+console.log(`Stripe Key Exists: ${!!process.env.STRIPE_SECRET_KEY}`);
+
+// Validate critical environment variables
 function validateEnvironmentVariables() {
   const requiredVars = [
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-    'AWS_REGION'
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_REGION",
+    "FRONTEND_URL",
+    "API_ENDPOINT",
+    "STRIPE_SECRET_KEY",
+    "COGNITO_CLIENT_ID",
+    "COGNITO_USER_POOL_ID",
   ];
 
-  const missing = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missing.length > 0) {
-    console.error('Missing required environment variables:', missing);
-    console.error('Current environment variables:');
-    console.error('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Missing');
-    console.error('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Missing');
-    console.error('AWS_REGION:', process.env.AWS_REGION);
-    process.exit(1);
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error("Missing required environment variables:", missingVars);
+    throw new Error("Environment configuration error: Missing variables.");
   }
 
-  // If all variables are present, initialize AWS configuration
-  const region = process.env.AWS_REGION;
-  return {
-    region,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    }
-  };
+  console.log("Environment variables validated successfully.");
 }
 
-// Call the function to get the config
-const awsConfig = validateEnvironmentVariables();
+// Execute validation and get AWS config
+validateEnvironmentVariables();
 
-console.log("Environment variables validated successfully.");
+const awsConfig = {
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+};
+
+// Initialize Stripe with environment-specific key
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// Log final configuration
 console.log("AWS Configuration Loaded:");
 console.log(`Region: ${awsConfig.region}`);
 console.log(`Access Key ID exists: ${!!awsConfig.credentials.accessKeyId}`);
 console.log(`Secret Access Key exists: ${!!awsConfig.credentials.secretAccessKey}`);
+console.log(`Stripe initialized for ${isProduction ? "production" : "testing/development"} environment`);
 
-// Verify Stripe key is loaded
-const stripeKey = process.env.NODE_ENV === "production"
-  ? process.env.STRIPE_LIVE_SECRET_KEY
-  : process.env.STRIPE_TEST_SECRET_KEY;
-
-if (!stripeKey) {
-  console.error("Missing Stripe Key:", {
-    NODE_ENV: process.env.NODE_ENV,
-    STRIPE_LIVE_SECRET_KEY: process.env.STRIPE_LIVE_SECRET_KEY ? "Exists" : "Missing",
-    STRIPE_TEST_SECRET_KEY: process.env.STRIPE_TEST_SECRET_KEY ? "Exists" : "Missing",
-  });
-  throw new Error("Stripe API key is missing. Please check your environment variables.");
-}
-
-// Initialize Stripe once
-const stripe = require("stripe")(stripeKey);
-
-// Core dependencies
-const express = require("express");
-const cookieParser = require("cookie-parser");
-const bodyParser = require("body-parser");
-const winston = require("winston");
-const cors = require("cors");
-const path = require("path");
-
-// Debug log to verify environment
-console.log("Environment:", process.env.NODE_ENV || 'development');
-
-// AWS SDK imports
-const { CognitoIdentityProviderClient } = require("@aws-sdk/client-cognito-identity-provider");
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const {
-  DynamoDBDocumentClient,
-  GetCommand,
-  UpdateCommand,
-  PutCommand,
-  ScanCommand,
-} = require("@aws-sdk/lib-dynamodb");
-const { SignatureV4 } = require("@aws-sdk/signature-v4");
-const { fromEnv } = require("@aws-sdk/credential-providers");
-const { Sha256 } = require("@aws-crypto/sha256-js");
-const { HttpRequest } = require("@aws-sdk/protocol-http");
-const { SignUpCommand, InitiateAuthCommand } = require("@aws-sdk/client-cognito-identity-provider");
-
-// Other dependencies
-const axios = require("axios");
-const jwt = require("jsonwebtoken");
-const jwksClient = require("jwks-rsa");
+// Export configuration
+module.exports = {
+  awsConfig,
+  stripe,
+};
 
 // Initialize Express app
 const app = express();
@@ -167,37 +172,39 @@ console.log("Frontend URL Configuration:", {
 
 // Middleware setup
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: (origin, callback) => {
     const allowedOrigins = {
-      production: 'https://app.contactvalidate.com',
-      testing: 'https://testing.contactvalidate.com',
-      development: process.env.FRONTEND_URL || 'http://localhost:3000'
+      production: process.env.FRONTEND_URL,
+      testing: process.env.FRONTEND_URL,
+      development: process.env.FRONTEND_URL || "http://localhost:3000",
     };
 
-    const allowedOrigin = allowedOrigins[process.env.NODE_ENV] || allowedOrigins.development;
-    
-    console.log("CORS Origin Check:", { 
-      environment: process.env.NODE_ENV,
-      requestOrigin: origin, 
-      allowedOrigin: allowedOrigin 
+    const currentEnvironment = process.env.NODE_ENV || "development";
+    const allowedOrigin = allowedOrigins[currentEnvironment];
+
+    console.log("CORS Origin Check:", {
+      environment: currentEnvironment,
+      requestOrigin: origin,
+      allowedOrigin: allowedOrigin,
     });
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
+
+    // Allow requests with no origin (e.g., mobile apps or cURL requests)
     if (!origin) {
       callback(null, true);
       return;
     }
 
+    // Check if the request origin matches the allowed origin for the current environment
     if (origin === allowedOrigin) {
       callback(null, true);
     } else {
-      console.log(`Rejected CORS request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      console.error(`CORS request rejected from origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
     }
   },
   methods: ["GET", "POST"],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
 
 app.use(cookieParser());
@@ -243,8 +250,6 @@ const verifyToken = (req, res, next) => {
 };
 
 // Utility Functions
-// In server-config.js, update these functions:
-
 async function getUserCredits(email) {
   if (!email) {
     logger.error("No email provided to getUserCredits");
@@ -332,8 +337,8 @@ async function logSearchHistory(email, searchQuery, requestID, status, rawRespon
 
 async function signUpUser(userData) {
   const params = {
-  ClientId: process.env.COGNITO_CLIENT_ID, // Environment variable
-  Username: userData.email,
+    ClientId: process.env.COGNITO_CLIENT_ID, // Environment variable
+    Username: userData.email,
     Password: userData.password,
     UserAttributes: [
       { Name: "email", Value: userData.email },
