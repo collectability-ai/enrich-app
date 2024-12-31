@@ -16,6 +16,8 @@
     "@aws-sdk/lib-dynamodb": "^3.712.0",
     "@aws-sdk/protocol-http": "^3.370.0",
     "@aws-sdk/signature-v4": "^3.370.0",
+    "aws-sdk": "^2.1692.0",
+    "aws-serverless-express": "^3.4.0",
     "aws4": "^1.13.2",
     "axios": "^1.7.9",
     "body-parser": "^1.20.3",

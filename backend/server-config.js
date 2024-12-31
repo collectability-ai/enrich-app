@@ -33,8 +33,14 @@ function validateEnvironmentVariables() {
   };
 }
 
-// Then call the function to get the config
+// Call the function to get the config
 const awsConfig = validateEnvironmentVariables();
+
+console.log("Environment variables validated successfully.");
+console.log("AWS Configuration Loaded:");
+console.log(`Region: ${awsConfig.region}`);
+console.log(`Access Key ID exists: ${!!awsConfig.credentials.accessKeyId}`);
+console.log(`Secret Access Key exists: ${!!awsConfig.credentials.secretAccessKey}`);
 
 // Verify Stripe key is loaded
 const stripeKey = process.env.NODE_ENV === "production"
@@ -42,14 +48,21 @@ const stripeKey = process.env.NODE_ENV === "production"
   : process.env.STRIPE_TEST_SECRET_KEY;
 
 if (!stripeKey) {
-  throw new Error('Stripe API key is missing. Please check your environment variables.');
+  console.error("Missing Stripe Key:", {
+    NODE_ENV: process.env.NODE_ENV,
+    STRIPE_LIVE_SECRET_KEY: process.env.STRIPE_LIVE_SECRET_KEY ? "Exists" : "Missing",
+    STRIPE_TEST_SECRET_KEY: process.env.STRIPE_TEST_SECRET_KEY ? "Exists" : "Missing",
+  });
+  throw new Error("Stripe API key is missing. Please check your environment variables.");
 }
+
+// Initialize Stripe once
+const stripe = require("stripe")(stripeKey);
 
 // Core dependencies
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
-const stripe = require("stripe")(stripeKey);
 const winston = require("winston");
 const cors = require("cors");
 const path = require("path");
@@ -81,20 +94,45 @@ const jwksClient = require("jwks-rsa");
 // Initialize Express app
 const app = express();
 
-// Constants
-console.log("Using AWS Region:", awsConfig.region); // Temporary log for verification
-const USER_CREDITS_TABLE = "EnV_UserCredits"; // Make sure this matches exactly
-const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
+// Environment and Constants
+const ENVIRONMENT = process.env.NODE_ENV || "development";
+console.log(`Running in Environment: ${ENVIRONMENT}`);
+
+// Dynamic Table and API Configuration
+const USER_CREDITS_TABLE = "EnV_UserCredits"; // Single table for all environments
+const SEARCH_HISTORY_TABLE = "EnV_SearchHistory"; // Single table for all environments
 const CREDIT_COSTS = {
   validate: 2,
   enrich: 2,
   validate_and_enrich: 3,
 };
 
+console.log(`Using User Credits Table: ${USER_CREDITS_TABLE}`);
+console.log(`Using Search History Table: ${SEARCH_HISTORY_TABLE}`);
+
 // Configure AWS Clients
-const dynamoDBClient = new DynamoDBClient(awsConfig);
+const dynamoDBClient = new DynamoDBClient({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
 const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
-const cognitoClient = new CognitoIdentityProviderClient(awsConfig);
+const cognitoClient = new CognitoIdentityProviderClient({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// Debugging Logs
+console.log("AWS Configuration:");
+console.log(`Region: ${process.env.AWS_REGION}`);
+console.log(`Access Key ID exists: ${!!process.env.AWS_ACCESS_KEY_ID}`);
+console.log(`Secret Access Key exists: ${!!process.env.AWS_SECRET_ACCESS_KEY}`);
 
 // Initialize SignatureV4 signer
 const signer = new SignatureV4({
@@ -124,28 +162,42 @@ const logger = winston.createLogger({
 // Debug log the frontend URL being used
 console.log("Frontend URL Configuration:", {
   NODE_ENV: process.env.NODE_ENV,
-  APP_URL: process.env.APP_URL,
   FRONTEND_URL: process.env.FRONTEND_URL
 });
 
 // Middleware setup
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigin = process.env.NODE_ENV === 'production' 
-      ? process.env.APP_URL 
-      : process.env.NODE_ENV === 'testing'
-        ? 'https://testing.contactvalidate.com'
-        : process.env.FRONTEND_URL;
+    const allowedOrigins = {
+      production: 'https://app.contactvalidate.com',
+      testing: 'https://testing.contactvalidate.com',
+      development: process.env.FRONTEND_URL || 'http://localhost:3000'
+    };
+
+    const allowedOrigin = allowedOrigins[process.env.NODE_ENV] || allowedOrigins.development;
     
     console.log("CORS Origin Check:", { 
+      environment: process.env.NODE_ENV,
       requestOrigin: origin, 
       allowedOrigin: allowedOrigin 
     });
     
-    callback(null, allowedOrigin);
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (origin === allowedOrigin) {
+      callback(null, true);
+    } else {
+      console.log(`Rejected CORS request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   methods: ["GET", "POST"],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(cookieParser());
@@ -153,7 +205,7 @@ app.use(bodyParser.json());
 
 // Serve static files from React build
 if (process.env.NODE_ENV === 'production') {
-    const buildPath = path.join(__dirname, '..', 'build');
+    const buildPath = path.join(__dirname, '..', 'frontend', 'build'); // Updated path
     logger.info(`Attempting to serve static files from: ${buildPath}`);
     try {
         const fs = require('fs');

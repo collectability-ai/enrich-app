@@ -12,7 +12,7 @@ frontend:
     build:
       commands:
         - echo "Building frontend"
-        - CI=false npm run build
+        - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
         - cd ../backend
         - echo "Building backend"
         - mkdir -p dist
