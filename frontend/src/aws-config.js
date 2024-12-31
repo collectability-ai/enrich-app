@@ -33,4 +33,7 @@ console.log("Amplify Config Object:", awsConfig);
 
 Amplify.configure(awsConfig);
 
+console.log("Amplify Config Variables:", config);
+console.log("Amplify Config Object:", awsConfig);
+
 export default awsConfig;

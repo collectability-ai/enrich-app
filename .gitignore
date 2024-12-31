@@ -39,6 +39,11 @@ yarn-error.log*
 backend/server.txt
 backend/backend.txt
 
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml
+
 # System Files
 .DS_Store
 **/.DS_Store

@@ -11,6 +11,7 @@ const {
   SEARCH_HISTORY_TABLE,
 } = require("./server-config");
 
+const awsServerlessExpress = require('aws-serverless-express');
 const path = require("path");
 
 const {
@@ -1192,7 +1193,7 @@ app.get("/auth/validate", (req, res) => {
 
 // Static Files Middleware
 if (process.env.NODE_ENV === 'production') {
-  const buildPath = path.join(__dirname, '..', 'build');
+  const buildPath = path.join(__dirname, '..', 'frontend', 'build');
   logger.info(`Serving static files from: ${buildPath}`);
 
   const fs = require('fs');
@@ -1212,7 +1213,7 @@ if (process.env.NODE_ENV === 'production') {
       return next();
     }
 
-    const indexPath = path.join(__dirname, '..', 'build', 'index.html');
+    const indexPath = path.join(__dirname, '..', 'frontend', 'build', 'index.html'); // Updated path
     res.sendFile(indexPath, (err) => {
       if (err) {
         logger.error('Error serving index.html:', err);
@@ -1221,9 +1222,22 @@ if (process.env.NODE_ENV === 'production') {
     });
   });
 }
+// Log before starting the server
+console.log("Starting the server...");
 
 // Start the server
-const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  logger.info(`Server is running on http://localhost:${port}`);
-});
+const server = awsServerlessExpress.createServer(app);
+
+if (process.env.NODE_ENV === 'development') {
+  const port = process.env.PORT || 8080;
+  app.listen(port, () => {
+    logger.info(`Server running locally on http://localhost:${port}`);
+    console.log("Environment: Development");
+  });
+} else {
+  exports.handler = (event, context) => {
+    console.log("Environment:", process.env.NODE_ENV || "Production/Testing");
+    console.log("Running in AWS Lambda mode");
+    return awsServerlessExpress.proxy(server, event, context);
+  };
+}

@@ -1,0 +1,25 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Current directory $(pwd)"
+        - echo "Node version $(node -v)"
+        - npm ci
+        - npm install -g react-scripts
+        - cd backend && npm ci && cd ..
+    build:
+      commands:
+        - if [ "${ENVIRONMENT}" = "testing" ]; then npm run build:testing; else npm run build:production; fi
+        - echo "Building backend"
+        - cd backend && npm run build
+  artifacts:
+    baseDirectory: build
+    files:
+      - '**/*'
+      - '../backend/dist/**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - backend/node_modules/**/*
+      - /root/.npm/**/*

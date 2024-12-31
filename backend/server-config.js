@@ -1,100 +1,134 @@
-// Load environment variables first
+// Import required modules
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+const winston = require('winston');
+const { CognitoIdentityProviderClient, SignUpCommand, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { SignatureV4 } = require('@aws-sdk/signature-v4');
+const { fromEnv } = require('@aws-sdk/credential-providers');
+const { Sha256 } = require('@aws-crypto/sha256-js');
+const { HttpRequest } = require('@aws-sdk/protocol-http');
+const axios = require('axios');
+const jwt = require('jsonwebtoken');
+const jwksClient = require('jwks-rsa');
+require("dotenv").config();
+
+// Load environment variables dynamically based on NODE_ENV
 require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || 'development'}`,
+  path: `.env.${process.env.NODE_ENV || "development"}`,
 });
 
-// First define the validation function
-function validateEnvironmentVariables() {
-  const requiredVars = [
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-    'AWS_REGION'
-  ];
+// Determine the environment dynamically
+const isProduction = process.env.NODE_ENV === "production";
 
-  const missing = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missing.length > 0) {
-    console.error('Missing required environment variables:', missing);
-    console.error('Current environment variables:');
-    console.error('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Missing');
-    console.error('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'Set' : 'Missing');
-    console.error('AWS_REGION:', process.env.AWS_REGION);
-    process.exit(1);
-  }
+// Dynamically assign environment-specific variables
+process.env.FRONTEND_URL = isProduction
+  ? process.env.FRONTEND_URL
+  : process.env.FRONTEND_URL || "http://localhost:3000";
 
-  // If all variables are present, initialize AWS configuration
-  const region = process.env.AWS_REGION;
-  return {
-    region,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    }
-  };
-}
+process.env.API_ENDPOINT = isProduction
+  ? process.env.API_ENDPOINT
+  : process.env.API_ENDPOINT;
 
-// Then call the function to get the config
-const awsConfig = validateEnvironmentVariables();
-
-// Verify Stripe key is loaded
-const stripeKey = process.env.NODE_ENV === "production"
+process.env.STRIPE_SECRET_KEY = isProduction
   ? process.env.STRIPE_LIVE_SECRET_KEY
   : process.env.STRIPE_TEST_SECRET_KEY;
 
-if (!stripeKey) {
-  throw new Error('Stripe API key is missing. Please check your environment variables.');
+// Debugging log
+console.log("Environment Configuration:");
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`Environment: ${isProduction ? "production" : "testing/development"}`);
+console.log(`FRONTEND_URL: ${process.env.FRONTEND_URL}`);
+console.log(`API_ENDPOINT: ${process.env.API_ENDPOINT}`);
+console.log(`Stripe Key Exists: ${!!process.env.STRIPE_SECRET_KEY}`);
+
+// Validate critical environment variables
+function validateEnvironmentVariables() {
+  const requiredVars = [
+    "AWS_REGION",
+    "FRONTEND_URL",
+    "API_ENDPOINT",
+    "STRIPE_SECRET_KEY",
+    "COGNITO_CLIENT_ID",
+    "COGNITO_USER_POOL_ID",
+  ];
+
+  if (!isProduction) {
+    requiredVars.push("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
+  }
+
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.error("Missing required environment variables:", missingVars);
+    throw new Error("Environment configuration error: Missing variables.");
+  }
+
+  console.log("Environment variables validated successfully.");
 }
 
-// Core dependencies
-const express = require("express");
-const cookieParser = require("cookie-parser");
-const bodyParser = require("body-parser");
-const stripe = require("stripe")(stripeKey);
-const winston = require("winston");
-const cors = require("cors");
-const path = require("path");
+// Execute validation and get AWS config
+validateEnvironmentVariables();
 
-// Debug log to verify environment
-console.log("Environment:", process.env.NODE_ENV || 'development');
+const awsConfig = {
+  region: process.env.AWS_REGION,
+  credentials: isProduction
+    ? fromEnv() // Use Lambda IAM role credentials
+    : {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+};
 
-// AWS SDK imports
-const { CognitoIdentityProviderClient } = require("@aws-sdk/client-cognito-identity-provider");
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const {
-  DynamoDBDocumentClient,
-  GetCommand,
-  UpdateCommand,
-  PutCommand,
-  ScanCommand,
-} = require("@aws-sdk/lib-dynamodb");
-const { SignatureV4 } = require("@aws-sdk/signature-v4");
-const { fromEnv } = require("@aws-sdk/credential-providers");
-const { Sha256 } = require("@aws-crypto/sha256-js");
-const { HttpRequest } = require("@aws-sdk/protocol-http");
-const { SignUpCommand, InitiateAuthCommand } = require("@aws-sdk/client-cognito-identity-provider");
+// Initialize Stripe with environment-specific key
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-// Other dependencies
-const axios = require("axios");
-const jwt = require("jsonwebtoken");
-const jwksClient = require("jwks-rsa");
+// Log final configuration
+console.log("AWS Configuration Loaded:");
+console.log(`Region: ${awsConfig.region}`);
+console.log(`Access Key ID exists: ${!!awsConfig.credentials.accessKeyId}`);
+console.log(`Secret Access Key exists: ${!!awsConfig.credentials.secretAccessKey}`);
+console.log(`Stripe initialized for ${isProduction ? "production" : "testing/development"} environment`);
+
+// Export configuration
+module.exports = {
+  awsConfig,
+  stripe,
+};
 
 // Initialize Express app
 const app = express();
 
-// Constants
-console.log("Using AWS Region:", awsConfig.region); // Temporary log for verification
-const USER_CREDITS_TABLE = "EnV_UserCredits"; // Make sure this matches exactly
-const SEARCH_HISTORY_TABLE = "EnV_SearchHistory";
+// Environment and Constants
+const ENVIRONMENT = process.env.NODE_ENV || "development";
+console.log(`Running in Environment: ${ENVIRONMENT}`);
+
+// Dynamic Table and API Configuration
+const USER_CREDITS_TABLE = "EnV_UserCredits"; // Single table for all environments
+const SEARCH_HISTORY_TABLE = "EnV_SearchHistory"; // Single table for all environments
 const CREDIT_COSTS = {
   validate: 2,
   enrich: 2,
   validate_and_enrich: 3,
 };
 
-// Configure AWS Clients
+console.log(`Using User Credits Table: ${USER_CREDITS_TABLE}`);
+console.log(`Using Search History Table: ${SEARCH_HISTORY_TABLE}`);
+
+// Initialize DynamoDB and Cognito Clients
 const dynamoDBClient = new DynamoDBClient(awsConfig);
 const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
 const cognitoClient = new CognitoIdentityProviderClient(awsConfig);
+
+// Debugging Logs for AWS Clients
+console.log("AWS Clients initialized:");
+console.log(`- DynamoDB: ${!!dynamoDBClient}`);
+console.log(`- DynamoDB Document Client: ${!!dynamoDBDocClient}`);
+console.log(`- Cognito Client: ${!!cognitoClient}`);
 
 // Initialize SignatureV4 signer
 const signer = new SignatureV4({
@@ -124,28 +158,44 @@ const logger = winston.createLogger({
 // Debug log the frontend URL being used
 console.log("Frontend URL Configuration:", {
   NODE_ENV: process.env.NODE_ENV,
-  APP_URL: process.env.APP_URL,
   FRONTEND_URL: process.env.FRONTEND_URL
 });
 
 // Middleware setup
 app.use(cors({
-  origin: function(origin, callback) {
-    const allowedOrigin = process.env.NODE_ENV === 'production' 
-      ? process.env.APP_URL 
-      : process.env.NODE_ENV === 'testing'
-        ? 'https://testing.contactvalidate.com'
-        : process.env.FRONTEND_URL;
-    
-    console.log("CORS Origin Check:", { 
-      requestOrigin: origin, 
-      allowedOrigin: allowedOrigin 
+  origin: (origin, callback) => {
+    const allowedOrigins = {
+      production: process.env.FRONTEND_URL,
+      testing: process.env.FRONTEND_URL,
+      development: process.env.FRONTEND_URL || "http://localhost:3000",
+    };
+
+    const currentEnvironment = process.env.NODE_ENV || "development";
+    const allowedOrigin = allowedOrigins[currentEnvironment];
+
+    console.log("CORS Origin Check:", {
+      environment: currentEnvironment,
+      requestOrigin: origin,
+      allowedOrigin: allowedOrigin,
     });
-    
-    callback(null, allowedOrigin);
+
+    // Allow requests with no origin (e.g., mobile apps or cURL requests)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    // Check if the request origin matches the allowed origin for the current environment
+    if (origin === allowedOrigin) {
+      callback(null, true);
+    } else {
+      console.error(`CORS request rejected from origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
   },
   methods: ["GET", "POST"],
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
 
 app.use(cookieParser());
@@ -153,7 +203,7 @@ app.use(bodyParser.json());
 
 // Serve static files from React build
 if (process.env.NODE_ENV === 'production') {
-    const buildPath = path.join(__dirname, '..', 'build');
+    const buildPath = path.join(__dirname, '..', 'frontend', 'build'); // Updated path
     logger.info(`Attempting to serve static files from: ${buildPath}`);
     try {
         const fs = require('fs');
@@ -191,8 +241,6 @@ const verifyToken = (req, res, next) => {
 };
 
 // Utility Functions
-// In server-config.js, update these functions:
-
 async function getUserCredits(email) {
   if (!email) {
     logger.error("No email provided to getUserCredits");
@@ -280,8 +328,8 @@ async function logSearchHistory(email, searchQuery, requestID, status, rawRespon
 
 async function signUpUser(userData) {
   const params = {
-  ClientId: process.env.COGNITO_CLIENT_ID, // Environment variable
-  Username: userData.email,
+    ClientId: process.env.COGNITO_CLIENT_ID, // Environment variable
+    Username: userData.email,
     Password: userData.password,
     UserAttributes: [
       { Name: "email", Value: userData.email },

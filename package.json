@@ -1,5 +1,23 @@
 {
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.716.0",
+    "@aws-sdk/client-dynamodb": "^3.716.0",
+    "@aws-sdk/lib-dynamodb": "^3.716.0",
     "aws-amplify": "^6.11.0"
+  },
+  "scripts": {
+    "start": "node backend/server.js",
+    "build": "react-scripts build && cd backend && npm install",
+    "postbuild": "npm run build:backend",
+    "build:backend": "cd backend && npm run build",
+    "build:production": "REACT_APP_ENVIRONMENT=production react-scripts build",
+    "build:testing": "REACT_APP_ENVIRONMENT=testing react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "build:test-local": "cross-env ENVIRONMENT=testing npm run build:testing",
+    "build:prod-local": "cross-env ENVIRONMENT=production npm run build:production"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }
