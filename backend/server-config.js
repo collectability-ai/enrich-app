@@ -1,4 +1,4 @@
-// Import required modules (Remove duplicates)
+// Import required modules
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -49,8 +49,6 @@ console.log(`Stripe Key Exists: ${!!process.env.STRIPE_SECRET_KEY}`);
 // Validate critical environment variables
 function validateEnvironmentVariables() {
   const requiredVars = [
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
     "AWS_REGION",
     "FRONTEND_URL",
     "API_ENDPOINT",
@@ -58,6 +56,10 @@ function validateEnvironmentVariables() {
     "COGNITO_CLIENT_ID",
     "COGNITO_USER_POOL_ID",
   ];
+
+  if (!isProduction) {
+    requiredVars.push("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
+  }
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
@@ -74,10 +76,12 @@ validateEnvironmentVariables();
 
 const awsConfig = {
   region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  credentials: isProduction
+    ? fromEnv() // Use Lambda IAM role credentials
+    : {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
 };
 
 // Initialize Stripe with environment-specific key
@@ -115,29 +119,16 @@ const CREDIT_COSTS = {
 console.log(`Using User Credits Table: ${USER_CREDITS_TABLE}`);
 console.log(`Using Search History Table: ${SEARCH_HISTORY_TABLE}`);
 
-// Configure AWS Clients
-const dynamoDBClient = new DynamoDBClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
+// Initialize DynamoDB and Cognito Clients
+const dynamoDBClient = new DynamoDBClient(awsConfig);
 const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
-const cognitoClient = new CognitoIdentityProviderClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+const cognitoClient = new CognitoIdentityProviderClient(awsConfig);
 
-// Debugging Logs
-console.log("AWS Configuration:");
-console.log(`Region: ${process.env.AWS_REGION}`);
-console.log(`Access Key ID exists: ${!!process.env.AWS_ACCESS_KEY_ID}`);
-console.log(`Secret Access Key exists: ${!!process.env.AWS_SECRET_ACCESS_KEY}`);
+// Debugging Logs for AWS Clients
+console.log("AWS Clients initialized:");
+console.log(`- DynamoDB: ${!!dynamoDBClient}`);
+console.log(`- DynamoDB Document Client: ${!!dynamoDBDocClient}`);
+console.log(`- Cognito Client: ${!!cognitoClient}`);
 
 // Initialize SignatureV4 signer
 const signer = new SignatureV4({
