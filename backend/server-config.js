@@ -15,36 +15,53 @@ const { HttpRequest } = require('@aws-sdk/protocol-http');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
-require("dotenv").config();
-
-// Load environment variables dynamically based on NODE_ENV
+// Load environment variables based on NODE_ENV
 require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || "development"}`,
+  path: `.env.${process.env.NODE_ENV || "development"}`, // Dynamically load .env.development, .env.production, etc.
 });
 
-// Determine the environment dynamically
-const isProduction = process.env.NODE_ENV === "production";
+// Determine if running in AWS Lambda
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Dynamically assign environment-specific variables
-process.env.FRONTEND_URL = isProduction
-  ? process.env.FRONTEND_URL
-  : process.env.FRONTEND_URL || "http://localhost:3000";
+// Determine the current environment (default to "development" if undefined)
+const ENVIRONMENT = process.env.NODE_ENV || "development";
 
-process.env.API_ENDPOINT = isProduction
-  ? process.env.API_ENDPOINT
-  : process.env.API_ENDPOINT;
+// Determine if running in production
+const isProduction = ENVIRONMENT === "production";
 
+// Map environment to the appropriate frontend URL
+const frontendUrls = {
+  production: "https://app.contactvalidate.com",
+  testing: "https://testing.contactvalidate.com",
+  development: "http://localhost:3000",
+};
+
+// Dynamically set environment-specific variables
+process.env.FRONTEND_URL =
+  process.env.FRONTEND_URL || frontendUrls[ENVIRONMENT];
+process.env.API_ENDPOINT =
+  process.env.API_ENDPOINT || "https://your-default-api-endpoint.com";
 process.env.STRIPE_SECRET_KEY = isProduction
-  ? process.env.STRIPE_LIVE_SECRET_KEY
-  : process.env.STRIPE_TEST_SECRET_KEY;
+  ? process.env.STRIPE_LIVE_SECRET_KEY || ""
+  : process.env.STRIPE_TEST_SECRET_KEY || "";
 
-// Debugging log
+// Log the current environment configuration
 console.log("Environment Configuration:");
-console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
-console.log(`Environment: ${isProduction ? "production" : "testing/development"}`);
-console.log(`FRONTEND_URL: ${process.env.FRONTEND_URL}`);
-console.log(`API_ENDPOINT: ${process.env.API_ENDPOINT}`);
-console.log(`Stripe Key Exists: ${!!process.env.STRIPE_SECRET_KEY}`);
+console.log({
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  FRONTEND_URL: process.env.FRONTEND_URL,
+  API_ENDPOINT: process.env.API_ENDPOINT,
+  STRIPE_SECRET_KEY_EXISTS: !!process.env.STRIPE_SECRET_KEY,
+});
+
+// Export key variables for use across the app
+module.exports = {
+  isLambda,
+  ENVIRONMENT,
+  FRONTEND_URL: process.env.FRONTEND_URL,
+};
 
 // Validate critical environment variables
 function validateEnvironmentVariables() {
@@ -103,10 +120,6 @@ module.exports = {
 // Initialize Express app
 const app = express();
 
-// Environment and Constants
-const ENVIRONMENT = process.env.NODE_ENV || "development";
-console.log(`Running in Environment: ${ENVIRONMENT}`);
-
 // Dynamic Table and API Configuration
 const USER_CREDITS_TABLE = "EnV_UserCredits"; // Single table for all environments
 const SEARCH_HISTORY_TABLE = "EnV_SearchHistory"; // Single table for all environments
@@ -164,29 +177,23 @@ console.log("Frontend URL Configuration:", {
 // Middleware setup
 app.use(cors({
   origin: (origin, callback) => {
-    const allowedOrigins = {
-      production: process.env.FRONTEND_URL,
-      testing: process.env.FRONTEND_URL,
-      development: process.env.FRONTEND_URL || "http://localhost:3000",
-    };
+    const allowedOrigins = [
+      'https://app.contactvalidate.com',
+      'https://testing.contactvalidate.com'
+    ];
 
-    const currentEnvironment = process.env.NODE_ENV || "development";
-    const allowedOrigin = allowedOrigins[currentEnvironment];
-
-    console.log("CORS Origin Check:", {
-      environment: currentEnvironment,
-      requestOrigin: origin,
-      allowedOrigin: allowedOrigin,
-    });
-
-    // Allow requests with no origin (e.g., mobile apps or cURL requests)
-    if (!origin) {
-      callback(null, true);
-      return;
+    // Allow localhost for development
+    if (!isLambda) {
+      allowedOrigins.push('http://localhost:3000');
     }
 
-    // Check if the request origin matches the allowed origin for the current environment
-    if (origin === allowedOrigin) {
+    console.log("CORS Origin Check:", { 
+      requestOrigin: origin,
+      allowedOrigins: allowedOrigins 
+    });
+
+    // Allow requests with no origin (e.g., mobile apps or server-to-server)
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.error(`CORS request rejected from origin: ${origin}`);
