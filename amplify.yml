@@ -3,21 +3,30 @@ frontend:
   phases:
     preBuild:
       commands:
+        - echo "Starting preBuild phase"
         - cd frontend
         - npm ci
         - npm install -g react-scripts
+        - echo "Environment Variables during preBuild:"
+        - printenv | grep REACT_APP_ # Debug: Log REACT_APP_* variables
         - cd ../backend
         - npm ci
+        - echo "Environment Variables during backend setup:"
+        - printenv | grep REACT_APP_ # Debug: Log REACT_APP_* variables for backend
         - cd ../frontend
     build:
       commands:
         - echo "Building frontend"
         - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
+        - echo "Frontend build completed"
+        - echo "Environment Variables after frontend build:"
+        - printenv | grep REACT_APP_ # Debug: Verify REACT_APP_* variables after frontend build
         - cd ../backend
         - echo "Building backend"
         - mkdir -p dist
         - cp server.js server-config.js package.json dist/
         - cd dist && npm install --omit=dev
+        - echo "Backend build completed"
   artifacts:
     baseDirectory: frontend/build
     files:
