@@ -9,10 +9,12 @@ const {
   CREDIT_COSTS,
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
+  allowedOrigins,
 } = require("./server-config");
 
 const awsServerlessExpress = require('aws-serverless-express');
 const path = require("path");
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 const {
   DynamoDBDocumentClient,
@@ -35,6 +37,7 @@ console.log("AWS Configuration:");
 console.log("- AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
 console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
 console.log("- AWS_REGION:", process.env.AWS_REGION);
+console.log("Allowed Origins for CORS:", allowedOrigins);
 
 // Enhanced Utility Functions
 async function getUserCredits(email) {
@@ -1191,53 +1194,68 @@ app.get("/auth/validate", (req, res) => {
   });
 });
 
-// Static Files Middleware
-if (process.env.NODE_ENV === 'production') {
-  const buildPath = path.join(__dirname, '..', 'frontend', 'build');
-  logger.info(`Serving static files from: ${buildPath}`);
+// Catch-All Route to Handle Proxy Paths
+app.all("*", (req, res) => {
+  const { path, method, body } = req;
 
-  const fs = require('fs');
+  console.log(`Received request: ${method} ${path}`);
+  console.log("Request body:", body);
+
+  res.status(200).json({
+    message: "Lambda is connected and receiving requests",
+    method,
+    path,
+    body,
+  });
+});
+
+// Import the file system module
+const fs = require('fs');
+
+// Static file handling
+if (isLambda) {
+  // In Lambda, we only handle API requests
+  app.all('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    // All non-API requests should be handled by Amplify
+    res.status(404).send('Not Found');
+  });
+} else {
+  // Local development static file serving
+  const buildPath = path.join(__dirname, 'build');
   if (fs.existsSync(buildPath)) {
     app.use(express.static(buildPath));
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      res.sendFile(path.join(buildPath, 'index.html'));
+    });
   } else {
-    logger.error(`Build directory not found: ${buildPath}`);
+    logger.warn('Build directory not found for local development');
   }
 }
 
-// React Fallback Middleware
-// Exclude API routes from being served by the React app
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api')) {
-      // Skip React fallback for API routes
-      return next();
-    }
-
-    const indexPath = path.join(__dirname, '..', 'frontend', 'build', 'index.html'); // Updated path
-    res.sendFile(indexPath, (err) => {
-      if (err) {
-        logger.error('Error serving index.html:', err);
-        res.status(500).send('Error loading application');
-      }
-    });
-  });
-}
 // Log before starting the server
 console.log("Starting the server...");
 
-// Start the server
-const server = awsServerlessExpress.createServer(app);
-
-if (process.env.NODE_ENV === 'development') {
+// Start the server based on environment
+if (!isLambda) {
+  // Local development server
   const port = process.env.PORT || 8080;
   app.listen(port, () => {
-    logger.info(`Server running locally on http://localhost:${port}`);
-    console.log("Environment: Development");
+    logger.info(`Development server running on http://localhost:${port}`);
   });
 } else {
+  // Lambda handler
+  const server = awsServerlessExpress.createServer(app);
   exports.handler = (event, context) => {
-    console.log("Environment:", process.env.NODE_ENV || "Production/Testing");
-    console.log("Running in AWS Lambda mode");
+    logger.info('Lambda handler called:', {
+      path: event.path,
+      httpMethod: event.httpMethod
+    });
     return awsServerlessExpress.proxy(server, event, context);
   };
 }
