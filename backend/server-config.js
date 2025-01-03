@@ -15,66 +15,44 @@ const { HttpRequest } = require('@aws-sdk/protocol-http');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
-// Load environment variables based on NODE_ENV
-require("dotenv").config({
-  path: `.env.${process.env.NODE_ENV || "development"}`, // Dynamically load .env.development, .env.production, etc.
-});
 
 // Determine if running in AWS Lambda
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Determine the current environment (default to "development" if undefined)
-const ENVIRONMENT = process.env.NODE_ENV || "development";
-
-// Determine if running in production
-const isProduction = ENVIRONMENT === "production";
-
-// Map environment to the appropriate frontend URL
-const frontendUrls = {
-  production: "https://app.contactvalidate.com",
-  testing: "https://testing.contactvalidate.com",
-  development: "http://localhost:3000",
-};
-
-// Dynamically set environment-specific variables
-process.env.FRONTEND_URL =
-  process.env.FRONTEND_URL || frontendUrls[ENVIRONMENT];
-process.env.API_ENDPOINT =
-  process.env.API_ENDPOINT || "https://your-default-api-endpoint.com";
-process.env.STRIPE_SECRET_KEY = isProduction
-  ? process.env.STRIPE_LIVE_SECRET_KEY || ""
-  : process.env.STRIPE_TEST_SECRET_KEY || "";
+// Parse allowed origins from environment variables
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : [];
 
 // Log the current environment configuration
 console.log("Environment Configuration:");
 console.log({
   isLambda,
-  ENVIRONMENT,
-  isProduction,
-  FRONTEND_URL: process.env.FRONTEND_URL,
+  ALLOWED_ORIGINS: allowedOrigins,
   API_ENDPOINT: process.env.API_ENDPOINT,
   STRIPE_SECRET_KEY_EXISTS: !!process.env.STRIPE_SECRET_KEY,
+  AWS_REGION: process.env.AWS_REGION,
 });
 
 // Export key variables for use across the app
 module.exports = {
   isLambda,
-  ENVIRONMENT,
-  FRONTEND_URL: process.env.FRONTEND_URL,
+  allowedOrigins,
+  API_ENDPOINT: process.env.API_ENDPOINT,
 };
 
 // Validate critical environment variables
 function validateEnvironmentVariables() {
   const requiredVars = [
     "AWS_REGION",
-    "FRONTEND_URL",
+    "ALLOWED_ORIGINS",
     "API_ENDPOINT",
     "STRIPE_SECRET_KEY",
     "COGNITO_CLIENT_ID",
     "COGNITO_USER_POOL_ID",
   ];
 
-  if (!isProduction) {
+  if (!isLambda) {
     requiredVars.push("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
   }
 
@@ -175,35 +153,24 @@ console.log("Frontend URL Configuration:", {
 });
 
 // Middleware setup
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      'https://app.contactvalidate.com',
-      'https://testing.contactvalidate.com'
-    ];
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      console.log("CORS Origin Check:", { requestOrigin: origin, allowedOrigins });
 
-    // Allow localhost for development
-    if (!isLambda) {
-      allowedOrigins.push('http://localhost:3000');
-    }
-
-    console.log("CORS Origin Check:", { 
-      requestOrigin: origin,
-      allowedOrigins: allowedOrigins 
-    });
-
-    // Allow requests with no origin (e.g., mobile apps or server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.error(`CORS request rejected from origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  methods: ["GET", "POST"],
-  credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-}));
+      // Allow requests with no origin (e.g., server-to-server or mobile apps)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.error(`CORS request rejected from origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
 
 app.use(cookieParser());
 app.use(bodyParser.json());
