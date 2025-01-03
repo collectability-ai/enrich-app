@@ -1,0 +1,37 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd frontend
+        - npm ci
+        - npm install -g react-scripts
+        - cd ../backend
+        - npm ci
+        - cd ../frontend
+    build:
+      commands:
+        - echo "Building frontend"
+        - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
+        - cd ../backend
+        - echo "Building backend"
+        - mkdir -p dist
+        - cp server.js server-config.js package.json dist/
+        - cd dist && npm install --omit=dev
+  artifacts:
+    baseDirectory: frontend/build
+    files:
+      - '**/*'
+      - '../backend/dist/**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+      - backend/node_modules/**/*
+      - /root/.npm/**/*
+  customRules:
+    - source: '/api/*'
+      target: '/backend/dist/server.js'
+      status: '200'
+    - source: '/*'
+      target: '/index.html'
+      status: '200'

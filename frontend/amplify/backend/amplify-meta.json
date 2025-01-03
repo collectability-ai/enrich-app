@@ -1,0 +1,57 @@
+{
+  "providers": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-enrichapp-testing-1a4b3-authRole",
+      "UnauthRoleArn": "arn:aws:iam::791922540057:role/amplify-enrichapp-testing-1a4b3-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::791922540057:role/amplify-enrichapp-testing-1a4b3-authRole",
+      "Region": "us-east-2",
+      "DeploymentBucketName": "amplify-enrichapp-testing-1a4b3-deployment",
+      "UnauthRoleName": "amplify-enrichapp-testing-1a4b3-unauthRole",
+      "StackName": "amplify-enrichapp-testing-1a4b3",
+      "StackId": "arn:aws:cloudformation:us-east-2:791922540057:stack/amplify-enrichapp-testing-1a4b3/117c9d60-bb72-11ef-8f96-0ac414fb475b",
+      "AmplifyAppId": "d2ufejcqlubfdz"
+    }
+  },
+  "auth": {
+    "enrichapp76e7a98e": {
+      "customAuth": false,
+      "dependsOn": [],
+      "frontendAuthConfig": {
+        "mfaConfiguration": "OFF",
+        "mfaTypes": [
+          "SMS"
+        ],
+        "passwordProtectionSettings": {
+          "passwordPolicyMinLength": 8,
+          "passwordPolicyCharacters": []
+        },
+        "signupAttributes": [
+          "EMAIL"
+        ],
+        "socialProviders": [],
+        "usernameAttributes": [
+          "EMAIL"
+        ],
+        "verificationMechanisms": [
+          "EMAIL"
+        ]
+      },
+      "providerPlugin": "awscloudformation",
+      "service": "Cognito",
+      "output": {
+        "UserPoolId": "us-east-2_tzdvA4pwi",
+        "AppClientIDWeb": "7euup63vji3l53hc1cs5ojsrsc",
+        "AppClientID": "1s1q40083vbnll8h38104cvi3p",
+        "IdentityPoolId": "us-east-2:b89eb7e7-2a21-4853-9860-d38cc75963f3",
+        "UserPoolArn": "arn:aws:cognito-idp:us-east-2:791922540057:userpool/us-east-2_tzdvA4pwi",
+        "IdentityPoolName": "enrichapp76e7a98e_identitypool_76e7a98e__testing",
+        "UserPoolName": "enrichapp76e7a98e_userpool_76e7a98e"
+      },
+      "lastPushTimeStamp": "2024-12-16T20:03:10.031Z",
+      "providerMetadata": {
+        "s3TemplateURL": "https://s3.amazonaws.com/amplify-enrichapp-testing-1a4b3-deployment/amplify-cfn-templates/auth/enrichapp76e7a98e-cloudformation-template.json",
+        "logicalId": "authenrichapp76e7a98e"
+      }
+    }
+  }
+}

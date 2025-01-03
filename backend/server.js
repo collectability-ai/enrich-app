@@ -9,7 +9,12 @@ const {
   CREDIT_COSTS,
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
+  allowedOrigins,
 } = require("./server-config");
+
+const awsServerlessExpress = require('aws-serverless-express');
+const path = require("path");
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 const {
   DynamoDBDocumentClient,
@@ -24,6 +29,15 @@ const { HttpRequest } = require("@aws-sdk/protocol-http");
 const { SignatureV4 } = require("@aws-sdk/signature-v4");
 const { Sha256 } = require("@aws-crypto/sha256-browser");
 const axios = require("axios");
+
+// Debug logging for environment setup
+console.log("Starting server...");
+console.log("Environment:", process.env.NODE_ENV);
+console.log("AWS Configuration:");
+console.log("- AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
+console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
+console.log("- AWS_REGION:", process.env.AWS_REGION);
+console.log("Allowed Origins for CORS:", allowedOrigins);
 
 // Enhanced Utility Functions
 async function getUserCredits(email) {
@@ -156,7 +170,7 @@ async function validatePurchaseRequest(email, priceId, paymentMethodId) {
 
 async function signUpUser(userData) {
   const params = {
-    ClientId: "64iqduh82e6tvd5orlkn7rktc8",
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
     Username: userData.email,
     Password: userData.password,
     UserAttributes: [
@@ -728,6 +742,7 @@ app.post("/get-purchase-history", async (req, res) => {
 
 // Route: Check or Fetch Credits
 app.post("/check-credits", async (req, res) => {
+  console.log("Check Credits endpoint hit");
   const { email } = req.body;
 
   if (!email) {
@@ -738,7 +753,7 @@ app.post("/check-credits", async (req, res) => {
     const credits = await getUserCredits(email);
     res.status(200).json({ email, credits });
   } catch (err) {
-    logger.error("Error checking credits:", err);
+    console.error("Error checking credits:", err);
     res.status(500).json({ error: "Failed to fetch credits" });
   }
 });
@@ -850,16 +865,16 @@ app.post("/use-search", async (req, res) => {
       },
     });
 
-    // Initialize the SignatureV4 signer with the SHA-256 hash constructor
-    const signer = new SignatureV4({
-      service: "execute-api",
-      region: "us-east-2",
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      },
-      sha256: Sha256, // Explicit SHA-256 hash implementation
-    });
+   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
+const signer = new SignatureV4({
+  service: "execute-api",
+  region: process.env.AWS_REGION, // Dynamic region from environment variables
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Dynamically loaded from environment
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Dynamically loaded from environment
+  },
+  sha256: Sha256, // Explicit SHA-256 hash implementation
+});
 
     const signedRequest = await signer.sign(request);
 
@@ -978,7 +993,7 @@ app.post("/get-search-history", async (req, res) => {
 // Utility function to sign up a user in Cognito
 async function signUpUser(userData) {
   const params = {
-    ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Cognito App Client ID
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
     Username: userData.email,
     Password: userData.password, // User-provided password
     UserAttributes: [
@@ -1076,7 +1091,7 @@ app.post("/login", async (req, res) => {
     // Parameters for Cognito login
     const params = {
       AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: "64iqduh82e6tvd5orlkn7rktc8", // Replace with your Cognito App Client ID
+      ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,
@@ -1179,8 +1194,68 @@ app.get("/auth/validate", (req, res) => {
   });
 });
 
-// Start the server
-const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  logger.info(`Server is running on http://localhost:${port}`);
+// Catch-All Route to Handle Proxy Paths
+app.all("*", (req, res) => {
+  const { path, method, body } = req;
+
+  console.log(`Received request: ${method} ${path}`);
+  console.log("Request body:", body);
+
+  res.status(200).json({
+    message: "Lambda is connected and receiving requests",
+    method,
+    path,
+    body,
+  });
 });
+
+// Import the file system module
+const fs = require('fs');
+
+// Static file handling
+if (isLambda) {
+  // In Lambda, we only handle API requests
+  app.all('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    // All non-API requests should be handled by Amplify
+    res.status(404).send('Not Found');
+  });
+} else {
+  // Local development static file serving
+  const buildPath = path.join(__dirname, 'build');
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      res.sendFile(path.join(buildPath, 'index.html'));
+    });
+  } else {
+    logger.warn('Build directory not found for local development');
+  }
+}
+
+// Log before starting the server
+console.log("Starting the server...");
+
+// Start the server based on environment
+if (!isLambda) {
+  // Local development server
+  const port = process.env.PORT || 8080;
+  app.listen(port, () => {
+    logger.info(`Development server running on http://localhost:${port}`);
+  });
+} else {
+  // Lambda handler
+  const server = awsServerlessExpress.createServer(app);
+  exports.handler = (event, context) => {
+    logger.info('Lambda handler called:', {
+      path: event.path,
+      httpMethod: event.httpMethod
+    });
+    return awsServerlessExpress.proxy(server, event, context);
+  };
+}
