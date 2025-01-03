@@ -78,6 +78,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@babel/plugin-transform-private-property-in-object": "^7.25.9",
     "@shadcn/ui": "^0.0.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
