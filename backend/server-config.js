@@ -16,41 +16,36 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
+// Import dotenv to load environment variables
+const dotenv = require("dotenv");
+
 // Determine if running in AWS Lambda
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Parse allowed origins from environment variables
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-  : [];
+// Load environment variables dynamically for local development
+if (!isLambda) {
+  dotenv.config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
+  console.log(`Loaded environment variables from .env.${process.env.NODE_ENV || 'development'}`);
+}
 
-// Log the current environment configuration
-console.log("Environment Configuration:");
-console.log({
-  isLambda,
-  ALLOWED_ORIGINS: allowedOrigins,
-  API_ENDPOINT: process.env.API_ENDPOINT,
-  STRIPE_SECRET_KEY_EXISTS: !!process.env.STRIPE_SECRET_KEY,
-  AWS_REGION: process.env.AWS_REGION,
-});
+// Ensure NODE_ENV is correctly set
+const ENVIRONMENT = process.env.NODE_ENV || (isLambda ? "production" : "development");
 
-// Export key variables for use across the app
-module.exports = {
-  isLambda,
-  allowedOrigins,
-  API_ENDPOINT: process.env.API_ENDPOINT,
-};
+// Determine if running in production
+const isProduction = ENVIRONMENT === "production";
 
 // Validate critical environment variables
 function validateEnvironmentVariables() {
   const requiredVars = [
     "AWS_REGION",
-    "ALLOWED_ORIGINS",
     "API_ENDPOINT",
-    "STRIPE_SECRET_KEY",
     "COGNITO_CLIENT_ID",
     "COGNITO_USER_POOL_ID",
   ];
+
+  // Add environment-specific variables
+  requiredVars.push("ALLOWED_ORIGINS");
+  requiredVars.push(isProduction ? "STRIPE_LIVE_SECRET_KEY" : "STRIPE_TEST_SECRET_KEY");
 
   if (!isLambda) {
     requiredVars.push("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
@@ -66,6 +61,51 @@ function validateEnvironmentVariables() {
   console.log("Environment variables validated successfully.");
 }
 
+// Validate environment variables before proceeding
+validateEnvironmentVariables();
+
+// Dynamically assign STRIPE_SECRET_KEY based on environment
+const stripeSecretKey = isProduction
+  ? process.env.STRIPE_LIVE_SECRET_KEY
+  : process.env.STRIPE_TEST_SECRET_KEY;
+
+// Initialize Stripe client and validate
+if (!stripeSecretKey) {
+  console.error("Stripe secret key is missing. Check environment variables.");
+  throw new Error("Stripe secret key is required for Stripe client initialization.");
+}
+
+const stripe = require("stripe")(stripeSecretKey);
+console.log("Stripe client initialized successfully.");
+
+// Parse allowed origins from environment variables or set default for development
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : ENVIRONMENT === "development"
+  ? ["http://localhost:5000"]
+  : [];
+
+// Log environment and configuration state
+console.log("Environment and Configuration State:", {
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  ALLOWED_ORIGINS: allowedOrigins,
+  API_ENDPOINT: process.env.API_ENDPOINT,
+  STRIPE_SECRET_KEY_EXISTS: !!stripeSecretKey,
+  AWS_REGION: process.env.AWS_REGION,
+});
+
+// Export key variables for use across the app
+module.exports = {
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  allowedOrigins,
+  stripe,
+  API_ENDPOINT: process.env.API_ENDPOINT,
+};
+
 // Execute validation and get AWS config
 validateEnvironmentVariables();
 
@@ -78,9 +118,6 @@ const awsConfig = {
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
 };
-
-// Initialize Stripe with environment-specific key
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // Log final configuration
 console.log("AWS Configuration Loaded:");
@@ -152,23 +189,28 @@ console.log("Frontend URL Configuration:", {
   FRONTEND_URL: process.env.FRONTEND_URL
 });
 
-// Middleware setup
+// Middleware setup for CORS
 app.use(
   cors({
     origin: (origin, callback) => {
-      console.log("CORS Origin Check:", { requestOrigin: origin, allowedOrigins });
+      const allowedOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
+        : ['http://localhost:3000'];
 
-      // Allow requests with no origin (e.g., server-to-server or mobile apps)
+      console.log('CORS Middleware Setup:');
+      console.log('Allowed Origins:', allowedOrigins);
+      console.log('Request Origin:', origin);
+
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         console.error(`CORS request rejected from origin: ${origin}`);
-        callback(new Error("Not allowed by CORS"));
+        callback(new Error('Not allowed by CORS'));
       }
     },
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true, // Allow cookies or credentials
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
 );
 
