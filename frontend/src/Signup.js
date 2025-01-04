@@ -8,7 +8,7 @@ console.log('Signup.js Environment:', process.env.REACT_APP_ENVIRONMENT);
 console.log('Signup.js Region:', process.env.REACT_APP_AWS_REGION);
 console.log('Signup.js User Pool ID:', process.env.REACT_APP_COGNITO_USER_POOL_ID);
 console.log('Signup.js User Pool Web Client ID:', process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID);
-console.log('Signup.js Identity Pool ID:', process.env.REACT_APP_COGNITO_IDENTITY_POOL_ID);
+console.log('Signup.js Identity Pool ID:', process.env.REACT_APP_IDENTITY_POOL_ID);
 console.log('Signup.js Auth Domain:', process.env.REACT_APP_COGNITO_AUTHORITY);
 console.log('Signup.js Redirect URI:', process.env.REACT_APP_REDIRECT_URI);
 console.log('Signup.js Cookie Domain:', process.env.REACT_APP_COOKIE_DOMAIN);

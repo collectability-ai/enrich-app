@@ -743,14 +743,23 @@ app.post("/get-purchase-history", async (req, res) => {
 // Route: Check or Fetch Credits
 app.post("/check-credits", async (req, res) => {
   console.log("Check Credits endpoint hit");
+  
+  // Log the request headers and body
+  console.log("Request headers:", req.headers);
+  console.log("Request body:", req.body);
+
   const { email } = req.body;
 
   if (!email) {
+    console.warn("Check Credits: Email is missing in request body");
     return res.status(400).json({ error: "Email is required" });
   }
 
   try {
+    console.log(`Fetching credits for email: ${email}`);
     const credits = await getUserCredits(email);
+    console.log(`Credits fetched successfully for ${email}:`, credits);
+
     res.status(200).json({ email, credits });
   } catch (err) {
     console.error("Error checking credits:", err);

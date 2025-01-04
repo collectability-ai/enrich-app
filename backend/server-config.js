@@ -201,11 +201,19 @@ app.use(
       console.log('Allowed Origins:', allowedOrigins);
       console.log('Request Origin:', origin);
 
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+      if (!origin) {
+        // Allow requests with no Origin header (e.g., server-to-server or cURL requests)
+        console.log('No Origin header present. Allowing request.');
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        // Allow requests from allowed origins
+        return callback(null, true);
       } else {
+        // Reject requests from disallowed origins
         console.error(`CORS request rejected from origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
+        return callback(new Error('Not allowed by CORS'));
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
