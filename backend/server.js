@@ -874,13 +874,13 @@ app.post("/use-search", async (req, res) => {
       },
     });
 
-   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
+  // Initialize the SignatureV4 signer with the SHA-256 hash constructor
 const signer = new SignatureV4({
   service: "execute-api",
   region: process.env.AWS_REGION, // Dynamic region from environment variables
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Dynamically loaded from environment
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Dynamically loaded from environment
+    accessKeyId: process.env.API_ACCESS_KEY_ID, // Custom environment variable for external API
+    secretAccessKey: process.env.API_SECRET_ACCESS_KEY, // Custom environment variable for external API
   },
   sha256: Sha256, // Explicit SHA-256 hash implementation
 });
@@ -1218,18 +1218,32 @@ app.all("*", (req, res) => {
   });
 });
 
+// Move this to be the last route in server.js
+app.use((req, res) => {
+  logger.warn('Unhandled route accessed:', {
+    method: req.method,
+    path: req.path,
+    body: req.body
+  });
+  
+  res.status(404).json({
+    error: "Route not found",
+    method: req.method,
+    path: req.path
+  });
+});
+
 // Import the file system module
 const fs = require('fs');
 
 // Static file handling
 if (isLambda) {
-  // In Lambda, we only handle API requests
+  // In Lambda, we only handle API routes
   app.all('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    // All non-API requests should be handled by Amplify
-    res.status(404).send('Not Found');
+    res.status(404).json({ error: 'Not Found' });
   });
 } else {
   // Local development static file serving
@@ -1237,10 +1251,9 @@ if (isLambda) {
   if (fs.existsSync(buildPath)) {
     app.use(express.static(buildPath));
     app.get('*', (req, res) => {
-      if (req.path.startsWith('/api/')) {
-        return next();
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(buildPath, 'index.html'));
       }
-      res.sendFile(path.join(buildPath, 'index.html'));
     });
   } else {
     logger.warn('Build directory not found for local development');
@@ -1250,7 +1263,7 @@ if (isLambda) {
 // Log before starting the server
 console.log("Starting the server...");
 
-// Start the server based on environment
+// Server startup and environment configuration
 if (!isLambda) {
   // Local development server
   const port = process.env.PORT || 8080;
@@ -1258,13 +1271,106 @@ if (!isLambda) {
     logger.info(`Development server running on http://localhost:${port}`);
   });
 } else {
-  // Lambda handler
+  // Lambda handler setup
+  const awsServerlessExpress = require('aws-serverless-express');
   const server = awsServerlessExpress.createServer(app);
-  exports.handler = (event, context) => {
-    logger.info('Lambda handler called:', {
-      path: event.path,
-      httpMethod: event.httpMethod
-    });
-    return awsServerlessExpress.proxy(server, event, context);
+
+  // Lambda event handler function
+  exports.handler = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false; // Prevent Lambda from waiting for the event loop to empty
+
+    const requestId = context.awsRequestId; // Set up consistent logging context
+    const logContext = {
+      requestId,
+      path: event.path || event.requestContext?.http?.path,
+      method: event.httpMethod || event.requestContext?.http?.method,
+    };
+
+    try {
+      // Normalize API Gateway v2 events for compatibility
+      if (event.version === '2.0') {
+        event = {
+          ...event,
+          httpMethod: event.requestContext.http.method,
+          path: event.requestContext.http.path,
+        };
+      }
+
+      // Ensure body is a string for Express compatibility
+      if (event.body && typeof event.body === 'object') {
+        event.body = JSON.stringify(event.body);
+      }
+
+      // Configure CORS headers
+      const headers = {
+        'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+          ? event.headers.origin
+          : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+        'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      };
+
+      // Handle OPTIONS preflight requests
+      if (event.httpMethod === 'OPTIONS') {
+        logger.info('Handling CORS preflight request', logContext);
+        return {
+          statusCode: 200,
+          headers,
+          body: '',
+        };
+      }
+
+      // Log incoming request details
+      logger.info('Processing request', {
+        ...logContext,
+        headers: event.headers,
+        body: event.body,
+      });
+
+      // Process request through aws-serverless-express
+      const response = await awsServerlessExpress.proxy(server, event, context, 'PROMISE').promise;
+
+      // Add CORS headers to response
+      const finalResponse = {
+        ...response,
+        headers: {
+          ...response.headers,
+          ...headers,
+        },
+      };
+
+      // Log successful response
+      logger.info('Request completed successfully', {
+        ...logContext,
+        statusCode: finalResponse.statusCode,
+      });
+
+      return finalResponse;
+    } catch (error) {
+      // Log error details
+      logger.error('Request failed', {
+        ...logContext,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      // Return formatted error response
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+            ? event.headers.origin
+            : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+          'Access-Control-Allow-Credentials': 'true',
+        },
+        body: JSON.stringify({
+          error: 'Internal server error',
+          message: isProduction ? 'An unexpected error occurred' : error.message,
+          requestId,
+        }),
+      };
+    }
   };
 }
