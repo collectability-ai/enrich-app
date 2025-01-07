@@ -4,6 +4,7 @@ const {
   express,
   stripe,
   logger,
+  FRONTEND_URL,
   verifyToken,
   dynamoDBDocClient,
   CREDIT_COSTS,
@@ -491,12 +492,8 @@ app.post("/create-checkout-session", async (req, res) => {
           userEmail: email,
         },
       },
-      success_url: `${
-        process.env.FRONTEND_URL || "http://localhost:3000"
-      }/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${
-        process.env.FRONTEND_URL || "http://localhost:3000"
-      }/dashboard?status=cancel`,
+      success_url: `${FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${FRONTEND_URL}/dashboard?status=cancel`,
       metadata: {
         credits: creditTiers[productType].credits,
         userEmail: email,
@@ -607,8 +604,8 @@ app.post("/create-setup-intent", verifyToken, async (req, res) => {
             payment_method_types: ['card'],
             mode: 'setup',
             customer: customer.id,
-            success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_success=true`,
-            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_canceled=true`,
+            success_url: `${process.env.FRONTEND_URL}/dashboard?setup_success=true`,  // MODIFIED
+            cancel_url: `${process.env.FRONTEND_URL}/dashboard?setup_canceled=true`,  // MODIFIED
         });
 
         res.status(200).send({ url: session.url });

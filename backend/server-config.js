@@ -126,6 +126,29 @@ const stripePriceIDs = {
 // Log the stripePriceIDs to confirm they are loaded correctly
 console.log("Loaded Stripe Price IDs:", stripePriceIDs);
 
+// Add Frontend URL determination
+const getFrontendUrl = () => {
+  switch (process.env.NODE_ENV) {
+    case 'production':
+      return 'https://app.contactvalidate.com';
+    case 'testing':
+      return 'https://testing.contactvalidate.com';
+    default:
+      return 'http://localhost:3000';
+  }
+};
+
+// Configure Frontend URL with fallback
+const FRONTEND_URL = process.env.FRONTEND_URL || getFrontendUrl();
+
+// Log the determined URL for debugging
+console.log('Frontend URL Configuration:', {
+  NODE_ENV: process.env.NODE_ENV,
+  FRONTEND_URL: FRONTEND_URL,
+  PROVIDED_URL: process.env.FRONTEND_URL,
+  DETERMINED_URL: getFrontendUrl()
+});
+
 // Define allowed origins based on environment
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
@@ -500,5 +523,7 @@ module.exports = {
   cognitoClient,
   InitiateAuthCommand,
   Sha256,
-  HttpRequest
+  HttpRequest,
+  FRONTEND_URL,
+  getFrontendUrl
 };
