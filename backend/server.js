@@ -600,13 +600,19 @@ app.post("/create-setup-intent", verifyToken, async (req, res) => {
             });
         }
 
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            mode: 'setup',
-            customer: customer.id,
-            success_url: `${process.env.FRONTEND_URL}/dashboard?setup_success=true`,  // MODIFIED
-            cancel_url: `${process.env.FRONTEND_URL}/dashboard?setup_canceled=true`,  // MODIFIED
-        });
+        const frontendUrl = process.env.FRONTEND_URL || (
+    process.env.REACT_APP_ENVIRONMENT === 'production' 
+        ? 'https://app.contactvalidate.com'
+        : 'https://testing.contactvalidate.com'
+);
+
+const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    mode: 'setup',
+    customer: customer.id,
+    success_url: `${frontendUrl}/dashboard?setup_success=true`,
+    cancel_url: `${frontendUrl}/dashboard?setup_canceled=true`,
+});
 
         res.status(200).send({ url: session.url });
         logger.info(`Setup session created for ${email}: ${session.id}`);
