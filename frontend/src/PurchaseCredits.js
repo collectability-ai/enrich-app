@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Loader } from 'lucide-react';
+import stripePriceIDs from "./lib/stripeConfig";
 
 console.log("API Base URL:", process.env.REACT_APP_API_BASE_URL);
 
@@ -12,14 +13,14 @@ const PurchaseCredits = ({ userEmail, token }) => {
   const [paymentMethod, setPaymentMethod] = useState(null);
   
   const creditPacks = [
-    { credits: 3, price: 2.0, priceId: "price_1QOubIAUGHTClvwyCb4r0ffE", type: "basic" },
-    { credits: 10, price: 5.97, priceId: "price_1QOv9IAUGHTClvwyRj2ChIb3", type: "basic" },
-    { credits: 50, price: 19.97, priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ", type: "basic" },
-    { credits: 150, price: 49.97, priceId: "price_1QOv9IAUGHTClvwyxw7vJURF", type: "popular" },
-    { credits: 500, price: 119.97, priceId: "price_1QOv9IAUGHTClvwyMRquKtpG", type: "premium" },
-    { credits: 1000, price: 199.97, priceId: "price_1QOv9IAUGHTClvwyBH9Jh7ir", type: "premium" },
-    { credits: 1750, price: 279.97, priceId: "price_1QOv9IAUGHTClvwykbXsElbr", type: "premium" }
-  ];
+  { credits: 3, price: 2.0, priceId: stripePriceIDs.basic3, productType: "basic3" },
+  { credits: 10, price: 5.97, priceId: stripePriceIDs.basic10, productType: "basic10" },
+  { credits: 50, price: 19.97, priceId: stripePriceIDs.basic50, productType: "basic50" },
+  { credits: 150, price: 49.97, priceId: stripePriceIDs.popular150, productType: "popular150" },
+  { credits: 500, price: 119.97, priceId: stripePriceIDs.premium500, productType: "premium500" },
+  { credits: 1000, price: 199.97, priceId: stripePriceIDs.premium1000, productType: "premium1000" },
+  { credits: 1750, price: 279.97, priceId: stripePriceIDs.premium1750, productType: "premium1750" },
+];
 
   const Modal = ({ children, isOpen, onClose }) => {
     if (!isOpen) return null;
@@ -91,89 +92,97 @@ const PurchaseCredits = ({ userEmail, token }) => {
     fetchCredits();
   }, [userEmail, token]);
 
-  const handleBuyPack = async (pack) => {
-    setSelectedPack(pack);
-    try {
-      console.log("Token sent:", token);
+ const handleBuyPack = async (pack) => {
+  setSelectedPack(pack);
 
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email: userEmail }),
-      });
+  console.log("Token sent:", token); // Debug token
+  console.log("Email sent:", userEmail); // Debug email
+  console.log("Selected pack:", pack); // Debug selected pack
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch payment methods.");
-      }
+  try {
+    const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ email: userEmail }),
+    });
 
-      const data = await response.json();
-
-if (data.paymentMethods && data.paymentMethods.length > 0) {
-  // Find the default payment method
-  const defaultMethod = data.paymentMethods.find((method) => method.isDefault);
-
-  // Use the default method or fallback to the first one
-  setPaymentMethod(defaultMethod || data.paymentMethods[0]);
-  setShowConfirmModal(true);
-} else {
-  console.log("No payment methods found, creating Stripe Checkout session...");
-  const checkoutResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: userEmail,
-      priceId: pack.priceId,
-    }),
-  });
-
-        if (!checkoutResponse.ok) {
-          throw new Error("Failed to create a checkout session.");
-        }
-
-        const checkoutData = await checkoutResponse.json();
-        window.location.href = checkoutData.url;
-      }
-    } catch (error) {
-      console.error("Error processing purchase:", error);
-      alert("An error occurred. Please try again.");
+    if (!response.ok) {
+      throw new Error("Failed to fetch payment methods.");
     }
-  };
 
-  const handleConfirmPurchase = async () => {
-    setIsProcessing(true);
-    try {
-      const purchaseResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/purchase-pack`, {
+    const data = await response.json();
+    console.log("Fetched payment methods:", data.paymentMethods); // Debug payment methods
+
+    if (data.paymentMethods && data.paymentMethods.length > 0) {
+      const defaultMethod = data.paymentMethods.find((method) => method.isDefault);
+      setPaymentMethod(defaultMethod || data.paymentMethods[0]);
+      setShowConfirmModal(true);
+    } else {
+      console.log("No payment methods found, creating Stripe Checkout session...");
+      const checkoutResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email: userEmail,
-          priceId: selectedPack.priceId,
-          paymentMethodId: paymentMethod.id,
+          priceId: pack.priceId,
         }),
       });
 
-      if (!purchaseResponse.ok) {
-        throw new Error("Failed to process the purchase.");
+      if (!checkoutResponse.ok) {
+        throw new Error("Failed to create a checkout session.");
       }
 
-      const purchaseData = await purchaseResponse.json();
-      setRemainingCredits(purchaseData.remainingCredits);
-      setShowConfirmModal(false);
-      setShowSuccessModal(true);
-    } catch (error) {
-      console.error("Error processing purchase:", error);
-      alert("An error occurred. Please try again.");
-    } finally {
-      setIsProcessing(false);
+      const checkoutData = await checkoutResponse.json();
+      window.location.href = checkoutData.url;
     }
-  };
+  } catch (error) {
+    console.error("Error processing purchase:", error);
+    alert("An error occurred. Please try again.");
+  }
+};
+
+const handleConfirmPurchase = async () => {
+  setIsProcessing(true);
+
+  try {
+    console.log("Selected Pack:", selectedPack); // Debugging log
+
+    const purchaseResponse = await fetch(
+      `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          productType: selectedPack.productType, // Use the explicit productType
+          paymentMethodId: paymentMethod?.id,
+        }),
+      }
+    );
+
+    if (!purchaseResponse.ok) {
+      throw new Error("Failed to process the purchase.");
+    }
+
+    const purchaseData = await purchaseResponse.json();
+    console.log("Purchase Response:", purchaseData); // Debug response
+    setRemainingCredits(purchaseData.remainingCredits);
+    setShowConfirmModal(false);
+    setShowSuccessModal(true);
+  } catch (error) {
+    console.error("Error processing purchase:", error);
+    alert("An error occurred. Please try again.");
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   const getBannerStyle = (type) => {
     switch (type) {

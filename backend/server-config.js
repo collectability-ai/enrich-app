@@ -99,6 +99,33 @@ if (!stripeSecretKey) {
 const stripe = require("stripe")(stripeSecretKey);
 console.log("Stripe client initialized successfully.");
 
+const stripePriceIDs = {
+  basic3: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_BASIC_3
+    : process.env.STRIPE_LIVE_PRICE_ID_BASIC_3,
+  basic10: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_BASIC_10
+    : process.env.STRIPE_LIVE_PRICE_ID_BASIC_10,
+  basic50: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_BASIC_50
+    : process.env.STRIPE_LIVE_PRICE_ID_BASIC_50,
+  popular150: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_POPULAR_150
+    : process.env.STRIPE_LIVE_PRICE_ID_POPULAR_150,
+  premium500: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_PREMIUM_500
+    : process.env.STRIPE_LIVE_PRICE_ID_PREMIUM_500,
+  premium1000: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_PREMIUM_1000
+    : process.env.STRIPE_LIVE_PRICE_ID_PREMIUM_1000,
+  premium1750: process.env.NODE_ENV === 'development'
+    ? process.env.STRIPE_TEST_PRICE_ID_PREMIUM_1750
+    : process.env.STRIPE_LIVE_PRICE_ID_PREMIUM_1750,
+};
+
+// Log the stripePriceIDs to confirm they are loaded correctly
+console.log("Loaded Stripe Price IDs:", stripePriceIDs);
+
 // Define allowed origins based on environment
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
@@ -460,6 +487,7 @@ module.exports = {
   logger,
   verifyToken,
   stripe,
+  stripePriceIDs,
   signer,
   getUserCredits,
   updateUserCredits,
