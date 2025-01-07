@@ -17,31 +17,29 @@ frontend:
     build:
       commands:
         - echo "Building frontend"
-        # Set FRONTEND_URL based on environment
+        - echo "Current environment: ${ENVIRONMENT}"
+        # Build based on environment but use Amplify env vars instead of .env files
         - |
           if [ "${ENVIRONMENT}" = "testing" ]; then
-            echo "FRONTEND_URL=https://testing.contactvalidate.com" >> .env.testing
+            echo "Building for testing environment"
             CI=false npm run build:testing
           else
-            echo "FRONTEND_URL=https://app.contactvalidate.com" >> .env.production
+            echo "Building for production environment"
             CI=false npm run build:production
           fi
         - echo "Frontend build completed"
         - echo "Environment Variables after frontend build:"
         - printenv | grep REACT_APP_ # Debug: Verify REACT_APP_* variables after frontend build
-        # Export FRONTEND_URL for backend use
-        - |
-          if [ "${ENVIRONMENT}" = "testing" ]; then
-            echo "export FRONTEND_URL=https://testing.contactvalidate.com" >> ../backend/dist/.env
-          else
-            echo "export FRONTEND_URL=https://app.contactvalidate.com" >> ../backend/dist/.env
-          fi
         - cd ../backend
         - echo "Building backend"
         - mkdir -p dist
         - cp server.js server-config.js package.json dist/
         - cd dist && npm install --omit=dev
         - echo "Backend build completed"
+        - echo "Final environment check:"
+        - echo "ENVIRONMENT: ${ENVIRONMENT}"
+        - echo "NODE_ENV: ${NODE_ENV}"
+        - echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"
   artifacts:
     baseDirectory: frontend/build
     files:
