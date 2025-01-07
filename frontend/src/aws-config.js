@@ -27,13 +27,12 @@ const awsConfig = {
   }
 };
 
-console.log("Amplify Config:", awsConfig);
-console.log("AWS Config Variables:", config);
-console.log("Amplify Config Object:", awsConfig);
+console.log("AWS Amplify Configuration and Variables:", {
+  awsConfig,
+  environmentVariables: config,
+});
 
+// Configure Amplify
 Amplify.configure(awsConfig);
-
-console.log("Amplify Config Variables:", config);
-console.log("Amplify Config Object:", awsConfig);
 
 export default awsConfig;
