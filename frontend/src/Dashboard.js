@@ -3,6 +3,7 @@ import axios from "axios";
 import SearchHistory from "./SearchHistory";
 import { jwtDecode } from "jwt-decode";
 import SuccessModal from './SuccessModal';
+import stripePriceIDs from "./lib/stripeConfig";
 
 const Dashboard = ({ token, email }) => {
   // State declarations
@@ -179,42 +180,46 @@ useEffect(() => {
     return () => { isMounted = false; };
   }, [token, userEmail]);
 
-  // Handler functions
-  const handleQuickBuy = async () => {
-  if (!paymentMethods?.length) {
-    console.log("No payment methods available. Redirecting to checkout...");
-    await handleStripeCheckout();
-    return;
-  }
-
-  // Log the paymentMethods array to debug
-  console.log("Payment Methods:", paymentMethods);
-
-  // Find the default payment method
-  const defaultPaymentMethod = paymentMethods.find((method) => method.isDefault) || paymentMethods[0];
-  console.log("Selected Payment Method:", defaultPaymentMethod);
-
-  const paymentMethodId = defaultPaymentMethod?.id;
-  const priceId = "price_1QOv9IAUGHTClvwyzELdaAiQ"; // Replace with appropriate value
-
-  if (!paymentMethodId) {
-    console.error("No valid payment method ID found.");
-    return;
-  }
-
-  setProcessing(true);
+// Handler functions
+const handleQuickBuy = async () => {
   try {
-    console.log("Sending Purchase Request...");
+    console.log("Starting Quick Buy process...");
+
+    // Validate payment methods
+    if (!paymentMethods?.length) {
+      console.log("No payment methods available. Redirecting to Stripe Checkout...");
+      await handleStripeCheckout("basic50");
+      return;
+    }
+
+    // Find the default payment method or fallback to the first one
+    const defaultPaymentMethod = paymentMethods.find((method) => method.isDefault) || paymentMethods[0];
+    if (!defaultPaymentMethod) {
+      console.error("No default payment method found. Aborting.");
+      alert("No default payment method found. Please add a payment method.");
+      return;
+    }
+
+    setProcessing(true);
+
+    // Log the payload for debugging
+    console.log("Sending purchase request with payload:", {
+      email: userEmail,
+      productType: "basic50", // Changed from priceId to productType
+      paymentMethodId: defaultPaymentMethod.id
+    });
+
     const response = await axios.post(
       `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
       {
         email: userEmail,
-        priceId,
-        paymentMethodId,
+        productType: "basic50", // Changed from priceId to productType
+        paymentMethodId: defaultPaymentMethod.id
       },
       {
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
       }
     );
@@ -224,35 +229,27 @@ useEffect(() => {
     setShowPopup(false);
     setShowSuccessModal(true);
   } catch (error) {
-    console.error("Error during purchase:", error.response?.data || error.message);
-
-    const errorMessage = error.response?.data?.error?.message;
-
-    if (
-      error.response?.data?.error?.code === "card_declined" ||
-      errorMessage?.includes("declined") ||
-      errorMessage?.includes("expired")
-    ) {
-      setError("Your card was declined. Redirecting to checkout to update payment method.");
-      setShowPopup(false);
-      setTimeout(handleStripeCheckout, 2000);
-    } else {
-      setError(errorMessage || "Failed to complete purchase. Please try again.");
-    }
+    console.error("Quick Buy Error:", error.response?.data || error.message);
+    setError(error.response?.data?.error?.message || "Quick Buy failed. Please try again.");
   } finally {
     setProcessing(false);
   }
 };
 
-
-
-  const handleStripeCheckout = async () => {
+const handleStripeCheckout = async (productType) => {
   try {
+    // Dynamically load the price ID for the selected product type
+    const priceId = stripePriceIDs[productType];
+
+    if (!priceId) {
+      throw new Error(`Price ID not found for product type: ${productType}`);
+    }
+
     const response = await axios.post(
       `${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`,
       {
         email: userEmail,
-        priceId: "price_1QOv9IAUGHTClvwyzELdaAiQ", // Adjust if needed
+        priceId,
       },
       {
         headers: {
@@ -272,7 +269,6 @@ useEffect(() => {
     setError("Failed to initiate checkout. Please try again.");
   }
 };
-
 
   const handleAddPaymentMethod = async () => {
     try {

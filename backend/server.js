@@ -10,6 +10,7 @@ const {
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
   allowedOrigins,
+  stripePriceIDs, // Import centralized Stripe Price IDs
 } = require("./server-config");
 
 const awsServerlessExpress = require('aws-serverless-express');
@@ -150,23 +151,23 @@ async function validatePurchaseRequest(email, priceId, paymentMethodId) {
     await initializeUserCredits(email);
   }
 
-  // Verify price ID is valid
-  const creditTiers = {
-    'price_1QOubIAUGHTClvwyCb4r0ffE': { amount: 200, credits: 3 },
-    'price_1QOv9IAUGHTClvwyRj2ChIb3': { amount: 597, credits: 10 },
-    'price_1QOv9IAUGHTClvwyzELdaAiQ': { amount: 1997, credits: 50 },
-    'price_1QOv9IAUGHTClvwyxw7vJURF': { amount: 4997, credits: 150 },
-    'price_1QOv9IAUGHTClvwyMRquKtpG': { amount: 11997, credits: 500 },
-    'price_1QOv9IAUGHTClvwyBH9Jh7ir': { amount: 19997, credits: 1000 },
-    'price_1QOv9IAUGHTClvwykbXsElbr': { amount: 27997, credits: 1750 }
-  };
+  // Verify productType and retrieve details
+ const creditTiers = {
+   basic3: { amount: 200, credits: 3 },
+   basic10: { amount: 597, credits: 10 },
+   basic50: { amount: 1997, credits: 50 },
+   popular150: { amount: 4997, credits: 150 },
+   premium500: { amount: 11997, credits: 500 },
+   premium1000: { amount: 19997, credits: 1000 },
+   premium1750: { amount: 27997, credits: 1750 },
+ };
 
-  if (!creditTiers[priceId]) {
-    throw new Error('Invalid price ID');
-  }
-
-  return creditTiers[priceId];
+if (!creditTiers[productType] || !stripePriceIDs[productType]) {
+  throw new Error("Invalid product type");
 }
+
+ return creditTiers[productType];
+} 
 
 async function signUpUser(userData) {
   const params = {
@@ -267,47 +268,72 @@ app.post("/secure-endpoint", verifyToken, (req, res) => {
 
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
-  const { email, priceId, paymentMethodId } = req.body;
+  const { email, productType, paymentMethodId } = req.body;
+
+  // Log the incoming payload
+  logger.info("Received payload for purchase-pack:", { email, productType, paymentMethodId });
+
   let paymentIntent = null;
 
   try {
-    logger.info("Purchase pack request received:", { email, priceId, paymentMethodId });
+    // Log detailed information about the incoming request
+    logger.info("Validating request fields...");
 
     // Validate required fields
-    if (!email || !priceId || !paymentMethodId) {
-      throw new Error('Missing required fields');
+    if (!email || !productType || !paymentMethodId) {
+      logger.error("Missing required fields:", { email, productType, paymentMethodId });
+      return res.status(400).json({ error: "Missing required fields: email, productType, or paymentMethodId" });
     }
 
-    // Ensure user exists in DynamoDB
+    // Log validated fields
+    logger.info("Request fields validated successfully:", { email, productType, paymentMethodId });
+
+    // Ensure the user exists in DynamoDB and initialize credits if not found
     const currentCredits = await getUserCredits(email);
     if (currentCredits === null) {
+      logger.info(`No credits found for ${email}. Initializing user in DynamoDB.`);
       await initializeUserCredits(email);
     }
 
-    // Get or create Stripe customer
+    // Retrieve or create the Stripe customer
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
     if (!customer) {
       customer = await stripe.customers.create({ email });
-      logger.info("Created new customer:", customer.id);
+      logger.info("Created new customer in Stripe:", { customerId: customer.id });
+    } else {
+      logger.info("Found existing Stripe customer:", { customerId: customer.id });
     }
 
-    // Define credit tiers
+    // Define credit tiers with corresponding price IDs
     const creditTiers = {
-      "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 },
-      "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
-      "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
-      "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
-      "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
-      "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
-      "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 }
+      basic3: { amount: 200, credits: 3 },
+      basic10: { amount: 597, credits: 10 },
+      basic50: { amount: 1997, credits: 50 },
+      popular150: { amount: 4997, credits: 150 },
+      premium500: { amount: 11997, credits: 500 },
+      premium1000: { amount: 19997, credits: 1000 },
+      premium1750: { amount: 27997, credits: 1750 },
     };
 
-    const selectedTier = creditTiers[priceId];
-    if (!selectedTier) {
-      throw new Error('Invalid price ID');
+    // Validate productType and retrieve the associated tier and priceId
+    const selectedTier = creditTiers[productType];
+    const priceId = stripePriceIDs[productType];
+
+    if (!selectedTier || !priceId) {
+      logger.error("Invalid product type provided:", { productType });
+      return res.status(400).json({ error: `Invalid product type: ${productType}` });
     }
+
+    // Log selected product details
+    logger.info("Selected product details:", {
+      productType,
+      credits: selectedTier.credits,
+      amount: selectedTier.amount,
+      priceId,
+    });
+
 
     // Create payment intent
     paymentIntent = await stripe.paymentIntents.create({
@@ -318,13 +344,16 @@ app.post("/purchase-pack", async (req, res) => {
       confirm: true,
       metadata: {
         credits: selectedTier.credits,
-        userEmail: email
+        userEmail: email,
       },
       automatic_payment_methods: {
         enabled: true,
-        allow_redirects: "never"
-      }
+        allow_redirects: "never",
+      },
     });
+
+    // Log payment intent creation
+    logger.info("Payment intent created successfully:", { paymentIntentId: paymentIntent.id });
 
     // Update credits with retry mechanism
     const newCredits = (currentCredits || 0) + selectedTier.credits;
@@ -333,17 +362,17 @@ app.post("/purchase-pack", async (req, res) => {
     // Verify credits were updated
     const verified = await verifyCreditsUpdate(email, newCredits);
     if (!verified) {
-      logger.error('Credits update verification failed', {
+      logger.error("Credits update verification failed", {
         email,
         expectedCredits: newCredits,
-        paymentIntentId: paymentIntent.id
+        paymentIntentId: paymentIntent.id,
       });
-      
+
       // Still return success but flag for admin attention
       res.status(200).send({
         message: "Payment processed successfully. Credits may take a few minutes to appear.",
         remainingCredits: await getUserCredits(email),
-        requiresVerification: true
+        requiresVerification: true,
       });
       return;
     }
@@ -351,37 +380,36 @@ app.post("/purchase-pack", async (req, res) => {
     // Success response
     res.status(200).send({
       message: "Credits purchased successfully.",
-      remainingCredits: newCredits
+      remainingCredits: newCredits,
     });
-
   } catch (err) {
     logger.error(`Error purchasing credits for ${email}:`, err);
 
     // If payment was processed but credits failed
-    if (paymentIntent?.status === 'succeeded') {
-      logger.error('CRITICAL: Payment succeeded but credits failed to update', {
+    if (paymentIntent?.status === "succeeded") {
+      logger.error("CRITICAL: Payment succeeded but credits failed to update", {
         email,
         paymentIntentId: paymentIntent.id,
-        error: err.message
+        error: err.message,
       });
 
       res.status(500).send({
         error: {
           message: "Payment processed but credits may be delayed. Our team has been notified.",
           paymentIntentId: paymentIntent.id,
-          requiresSupport: true
-        }
+          requiresSupport: true,
+        },
       });
       return;
     }
 
     // Handle Stripe-specific errors
-    if (err.type === 'StripeCardError') {
+    if (err.type === "StripeCardError") {
       res.status(400).send({
         error: {
           message: "Your card was declined. Please try a different payment method.",
-          code: err.code
-        }
+          code: err.code,
+        },
       });
       return;
     }
@@ -389,40 +417,40 @@ app.post("/purchase-pack", async (req, res) => {
     // General error response
     res.status(400).send({
       error: {
-        message: err.message || "Purchase failed. Please try again."
-      }
+        message: err.message || "Purchase failed. Please try again.",
+      },
     });
   }
 });
 
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
-  const { email, priceId } = req.body;
+  const { email, productType } = req.body; // Use `productType` instead of `priceId`
 
-  logger.info("Creating checkout session for:", { email, priceId });
+  logger.info("Creating checkout session for:", { email, productType });
 
-  // Define the credit tiers and their Stripe price IDs
+  // Define credit tiers and their details
   const creditTiers = {
-    "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
-    "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
-    "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
-    "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
-    "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
-    "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 },
-    "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 }
+    basic3: { amount: 200, credits: 3 },
+    basic10: { amount: 597, credits: 10 },
+    basic50: { amount: 1997, credits: 50 },
+    popular150: { amount: 4997, credits: 150 },
+    premium500: { amount: 11997, credits: 500 },
+    premium1000: { amount: 19997, credits: 1000 },
+    premium1750: { amount: 27997, credits: 1750 },
   };
 
   try {
     // Validate request data
-    if (!email || !priceId) {
-      logger.error("Missing required fields:", { email, priceId });
-      return res.status(400).send({ error: "Email and Price ID are required" });
+    if (!email || !productType) {
+      logger.error("Missing required fields:", { email, productType });
+      return res.status(400).send({ error: "Email and product type are required" });
     }
 
-    // Validate price ID
-    if (!creditTiers[priceId]) {
-      logger.error("Invalid price ID:", priceId);
-      return res.status(400).send({ error: "Invalid price ID" });
+    // Validate product type
+    if (!creditTiers[productType] || !stripePriceIDs[productType]) {
+      logger.error("Invalid product type:", productType);
+      return res.status(400).send({ error: "Invalid product type" });
     }
 
     // Look for an existing customer
@@ -442,54 +470,62 @@ app.post("/create-checkout-session", async (req, res) => {
       logger.info("Found existing customer:", customer.id);
     }
 
+    // Get the price ID from the centralized configuration
+    const priceId = stripePriceIDs[productType];
+
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ["card"],
-      line_items: [{
-        price: priceId,
-        quantity: 1,
-      }],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
       mode: "payment",
       payment_intent_data: {
-        setup_future_usage: 'off_session',
+        setup_future_usage: "off_session",
         metadata: {
-          credits: creditTiers[priceId].credits,
-          userEmail: email
-        }
+          credits: creditTiers[productType].credits,
+          userEmail: email,
+        },
       },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?status=cancel`,
+      success_url: `${
+        process.env.FRONTEND_URL || "http://localhost:3000"
+      }/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${
+        process.env.FRONTEND_URL || "http://localhost:3000"
+      }/dashboard?status=cancel`,
       metadata: {
-        credits: creditTiers[priceId].credits,
-        userEmail: email
+        credits: creditTiers[productType].credits,
+        userEmail: email,
       },
       allow_promotion_codes: true,
       billing_address_collection: "required",
-      submit_type: "pay"
+      submit_type: "pay",
     });
 
     logger.info("Checkout session created:", {
       sessionId: session.id,
       customerId: customer.id,
-      email: email
+      email: email,
     });
 
     res.status(200).json({
       url: session.url,
-      sessionId: session.id
+      sessionId: session.id,
     });
-
   } catch (error) {
     logger.error("Error creating checkout session:", {
       error: error.message,
       stack: error.stack,
       email: email,
-      priceId: priceId
+      productType: productType,
     });
-    res.status(500).send({ 
+    res.status(500).send({
       error: "Failed to create checkout session",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -874,13 +910,13 @@ app.post("/use-search", async (req, res) => {
       },
     });
 
-   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
+  // Initialize the SignatureV4 signer with the SHA-256 hash constructor
 const signer = new SignatureV4({
   service: "execute-api",
   region: process.env.AWS_REGION, // Dynamic region from environment variables
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Dynamically loaded from environment
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Dynamically loaded from environment
+    accessKeyId: process.env.API_ACCESS_KEY_ID, // Custom environment variable for external API
+    secretAccessKey: process.env.API_SECRET_ACCESS_KEY, // Custom environment variable for external API
   },
   sha256: Sha256, // Explicit SHA-256 hash implementation
 });
@@ -1218,18 +1254,32 @@ app.all("*", (req, res) => {
   });
 });
 
+// Move this to be the last route in server.js
+app.use((req, res) => {
+  logger.warn('Unhandled route accessed:', {
+    method: req.method,
+    path: req.path,
+    body: req.body
+  });
+  
+  res.status(404).json({
+    error: "Route not found",
+    method: req.method,
+    path: req.path
+  });
+});
+
 // Import the file system module
 const fs = require('fs');
 
 // Static file handling
 if (isLambda) {
-  // In Lambda, we only handle API requests
+  // In Lambda, we only handle API routes
   app.all('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    // All non-API requests should be handled by Amplify
-    res.status(404).send('Not Found');
+    res.status(404).json({ error: 'Not Found' });
   });
 } else {
   // Local development static file serving
@@ -1237,10 +1287,9 @@ if (isLambda) {
   if (fs.existsSync(buildPath)) {
     app.use(express.static(buildPath));
     app.get('*', (req, res) => {
-      if (req.path.startsWith('/api/')) {
-        return next();
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(buildPath, 'index.html'));
       }
-      res.sendFile(path.join(buildPath, 'index.html'));
     });
   } else {
     logger.warn('Build directory not found for local development');
@@ -1250,7 +1299,7 @@ if (isLambda) {
 // Log before starting the server
 console.log("Starting the server...");
 
-// Start the server based on environment
+// Server startup and environment configuration
 if (!isLambda) {
   // Local development server
   const port = process.env.PORT || 8080;
@@ -1258,13 +1307,106 @@ if (!isLambda) {
     logger.info(`Development server running on http://localhost:${port}`);
   });
 } else {
-  // Lambda handler
+  // Lambda handler setup
+  const awsServerlessExpress = require('aws-serverless-express');
   const server = awsServerlessExpress.createServer(app);
-  exports.handler = (event, context) => {
-    logger.info('Lambda handler called:', {
-      path: event.path,
-      httpMethod: event.httpMethod
-    });
-    return awsServerlessExpress.proxy(server, event, context);
+
+  // Lambda event handler function
+  exports.handler = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false; // Prevent Lambda from waiting for the event loop to empty
+
+    const requestId = context.awsRequestId; // Set up consistent logging context
+    const logContext = {
+      requestId,
+      path: event.path || event.requestContext?.http?.path,
+      method: event.httpMethod || event.requestContext?.http?.method,
+    };
+
+    try {
+      // Normalize API Gateway v2 events for compatibility
+      if (event.version === '2.0') {
+        event = {
+          ...event,
+          httpMethod: event.requestContext.http.method,
+          path: event.requestContext.http.path,
+        };
+      }
+
+      // Ensure body is a string for Express compatibility
+      if (event.body && typeof event.body === 'object') {
+        event.body = JSON.stringify(event.body);
+      }
+
+      // Configure CORS headers
+      const headers = {
+        'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+          ? event.headers.origin
+          : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+        'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      };
+
+      // Handle OPTIONS preflight requests
+      if (event.httpMethod === 'OPTIONS') {
+        logger.info('Handling CORS preflight request', logContext);
+        return {
+          statusCode: 200,
+          headers,
+          body: '',
+        };
+      }
+
+      // Log incoming request details
+      logger.info('Processing request', {
+        ...logContext,
+        headers: event.headers,
+        body: event.body,
+      });
+
+      // Process request through aws-serverless-express
+      const response = await awsServerlessExpress.proxy(server, event, context, 'PROMISE').promise;
+
+      // Add CORS headers to response
+      const finalResponse = {
+        ...response,
+        headers: {
+          ...response.headers,
+          ...headers,
+        },
+      };
+
+      // Log successful response
+      logger.info('Request completed successfully', {
+        ...logContext,
+        statusCode: finalResponse.statusCode,
+      });
+
+      return finalResponse;
+    } catch (error) {
+      // Log error details
+      logger.error('Request failed', {
+        ...logContext,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      // Return formatted error response
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+            ? event.headers.origin
+            : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+          'Access-Control-Allow-Credentials': 'true',
+        },
+        body: JSON.stringify({
+          error: 'Internal server error',
+          message: isProduction ? 'An unexpected error occurred' : error.message,
+          requestId,
+        }),
+      };
+    }
   };
 }
