@@ -2,7 +2,7 @@
 
 # Set version number and description
 $version = "v1.9.9"
-$description = "Added env logs for signin redirects. Localhost fully functional."
+$description = "Added env logs for signin redirects. localhost fully functional."
 
 # Add all changes
 git add .
