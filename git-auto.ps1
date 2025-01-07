@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v1.9.8"
-$description = "Stripe PriceIDs changed to variables. Localhost fully functional."
+$version = "v1.9.9"
+$description = "Added env logs for signin redirects. Localhost fully functional."
 
 # Add all changes
 git add .

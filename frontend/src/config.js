@@ -55,5 +55,10 @@ console.log("Environment Variables Debug:", {
   STAGE: config.STAGE,
 });
 
+console.log("Injected Redirect Environment Variables:", {
+  REACT_APP_REDIRECT_SIGN_IN: process.env.REACT_APP_REDIRECT_SIGN_IN,
+  REACT_APP_REDIRECT_SIGN_OUT: process.env.REACT_APP_REDIRECT_SIGN_OUT,
+});
+
 // Export the configuration for use throughout the app
 export default config;
