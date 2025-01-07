@@ -17,10 +17,25 @@ frontend:
     build:
       commands:
         - echo "Building frontend"
-        - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
+        # Set FRONTEND_URL based on environment
+        - |
+          if [ "${ENVIRONMENT}" = "testing" ]; then
+            echo "FRONTEND_URL=https://testing.contactvalidate.com" >> .env.testing
+            CI=false npm run build:testing
+          else
+            echo "FRONTEND_URL=https://app.contactvalidate.com" >> .env.production
+            CI=false npm run build:production
+          fi
         - echo "Frontend build completed"
         - echo "Environment Variables after frontend build:"
         - printenv | grep REACT_APP_ # Debug: Verify REACT_APP_* variables after frontend build
+        # Export FRONTEND_URL for backend use
+        - |
+          if [ "${ENVIRONMENT}" = "testing" ]; then
+            echo "export FRONTEND_URL=https://testing.contactvalidate.com" >> ../backend/dist/.env
+          else
+            echo "export FRONTEND_URL=https://app.contactvalidate.com" >> ../backend/dist/.env
+          fi
         - cd ../backend
         - echo "Building backend"
         - mkdir -p dist
