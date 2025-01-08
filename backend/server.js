@@ -419,7 +419,7 @@ app.post("/purchase-pack", async (req, res) => {
 
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
-  const { email, productId } = req.body; // Use `productId` instead of `priceId`
+  const { email, productId } = req.body;
 
   logger.info("Creating checkout session for:", { email, productId });
 
@@ -442,37 +442,39 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 
     // Validate productId
-    const priceId = stripePriceIDs[productId]; // Map productId to priceId
-    const credits = creditTiers[productId]?.credits; // Map productId to credits
+    const priceId = stripePriceIDs[productId];
+    const credits = creditTiers[productId]?.credits;
 
     if (!priceId || !credits) {
       logger.error("Invalid productId or missing mappings:", { productId });
       return res.status(400).send({ error: "Invalid productId or missing mappings" });
     }
 
-    // Look for an existing customer
-    let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: email,
-      limit: 1,
-    });
+    // Determine the correct frontend URL
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      (process.env.REACT_APP_ENVIRONMENT === "production"
+        ? "https://app.contactvalidate.com"
+        : "https://testing.contactvalidate.com");
 
-    if (existingCustomers.data.length === 0) {
-      customer = await stripe.customers.create({
-        email: email,
-      });
-      logger.info("Created new customer:", customer.id);
+    // Look for or create a customer
+    const customers = await stripe.customers.list({ email });
+    let customer = customers.data[0];
+
+    if (!customer) {
+      customer = await stripe.customers.create({ email });
+      logger.info(`Created new customer: ${customer.id}`);
     } else {
-      customer = existingCustomers.data[0];
-      logger.info("Found existing customer:", customer.id);
+      logger.info(`Found existing customer: ${customer.id}`);
     }
 
-    // Log the session creation details
+    // Log session creation details
     logger.info("Creating Stripe Checkout Session with:", {
       productId,
       priceId,
       credits,
       email,
+      frontendUrl,
     });
 
     // Create the checkout session
@@ -493,38 +495,29 @@ app.post("/create-checkout-session", async (req, res) => {
           userEmail: email,
         },
       },
-      success_url: `${process.env.FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${process.env.FRONTEND_URL}/dashboard?status=cancel`,
-      metadata: {
-        credits: credits,
-        userEmail: email,
-      },
+      success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${frontendUrl}/dashboard?status=cancel`,
       allow_promotion_codes: true,
       billing_address_collection: "required",
       submit_type: "pay",
     });
 
+    // Log successful session creation
     logger.info("Checkout session created:", {
       sessionId: session.id,
       customerId: customer.id,
       email: email,
     });
 
-    res.status(200).json({
-      url: session.url,
-      sessionId: session.id,
-    });
+    res.status(200).json({ url: session.url, sessionId: session.id });
   } catch (error) {
     logger.error("Error creating checkout session:", {
       error: error.message,
       stack: error.stack,
-      email: email,
-      productId: productId,
+      email,
+      productId,
     });
-    res.status(500).send({
-      error: "Failed to create checkout session",
-      details: error.message,
-    });
+    res.status(500).send({ error: "Failed to create checkout session", details: error.message });
   }
 });
 

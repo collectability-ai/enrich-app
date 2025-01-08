@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.0.3"
-$description = "Fixed stripe checkout with no payment method. localhost fully functional."
+$version = "v2.0.4"
+$description = "Fixed stripe checkout with no payment method in testing - allowedOrigins. Updated Sidebar. localhost fully functional."
 
 # Add all changes
 git add .
