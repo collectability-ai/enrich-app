@@ -163,11 +163,11 @@ async function validatePurchaseRequest(email, priceId, paymentMethodId) {
    premium1750: { amount: 27997, credits: 1750 },
  };
 
-if (!creditTiers[productType] || !stripePriceIDs[productType]) {
+if (!creditTiers[productId] || !stripePriceIDs[productId]) {
   throw new Error("Invalid product type");
 }
 
- return creditTiers[productType];
+ return creditTiers[productId];
 } 
 
 async function signUpUser(userData) {
@@ -269,25 +269,23 @@ app.post("/secure-endpoint", verifyToken, (req, res) => {
 
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
-  const { email, productType, paymentMethodId } = req.body;
+  const { email, productId, paymentMethodId } = req.body;
 
   // Log the incoming payload
-  logger.info("Received payload for purchase-pack:", { email, productType, paymentMethodId });
+  logger.info("Received payload for purchase-pack:", { email, productId, paymentMethodId });
 
   let paymentIntent = null;
 
   try {
-    // Log detailed information about the incoming request
-    logger.info("Validating request fields...");
-
     // Validate required fields
-    if (!email || !productType || !paymentMethodId) {
-      logger.error("Missing required fields:", { email, productType, paymentMethodId });
-      return res.status(400).json({ error: "Missing required fields: email, productType, or paymentMethodId" });
+    logger.info("Validating request fields...");
+    if (!email || !productId || !paymentMethodId) {
+      logger.error("Missing required fields:", { email, productId, paymentMethodId });
+      return res.status(400).json({ error: "Missing required fields: email, productId, or paymentMethodId" });
     }
 
     // Log validated fields
-    logger.info("Request fields validated successfully:", { email, productType, paymentMethodId });
+    logger.info("Request fields validated successfully:", { email, productId, paymentMethodId });
 
     // Ensure the user exists in DynamoDB and initialize credits if not found
     const currentCredits = await getUserCredits(email);
@@ -297,6 +295,7 @@ app.post("/purchase-pack", async (req, res) => {
     }
 
     // Retrieve or create the Stripe customer
+    logger.info("Retrieving or creating Stripe customer...");
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
@@ -307,36 +306,33 @@ app.post("/purchase-pack", async (req, res) => {
       logger.info("Found existing Stripe customer:", { customerId: customer.id });
     }
 
-    // Define credit tiers with corresponding price IDs
-    const creditTiers = {
-      basic3: { amount: 200, credits: 3 },
-      basic10: { amount: 597, credits: 10 },
-      basic50: { amount: 1997, credits: 50 },
-      popular150: { amount: 4997, credits: 150 },
-      premium500: { amount: 11997, credits: 500 },
-      premium1000: { amount: 19997, credits: 1000 },
-      premium1750: { amount: 27997, credits: 1750 },
+    // Define credit tiers by productId
+    const creditTiersByProductId = {
+      prod_basic3: { amount: 200, credits: 3 },
+      prod_basic10: { amount: 597, credits: 10 },
+      prod_basic50: { amount: 1997, credits: 50 },
+      prod_popular150: { amount: 4997, credits: 150 },
+      prod_premium500: { amount: 11997, credits: 500 },
+      prod_premium1000: { amount: 19997, credits: 1000 },
+      prod_premium1750: { amount: 27997, credits: 1750 },
     };
 
-    // Validate productType and retrieve the associated tier and priceId
-    const selectedTier = creditTiers[productType];
-    const priceId = stripePriceIDs[productType];
-
-    if (!selectedTier || !priceId) {
-      logger.error("Invalid product type provided:", { productType });
-      return res.status(400).json({ error: `Invalid product type: ${productType}` });
+    // Validate productId and retrieve the associated tier
+    const selectedTier = creditTiersByProductId[productId];
+    if (!selectedTier) {
+      logger.error("Invalid product ID provided:", { productId });
+      return res.status(400).json({ error: `Invalid product ID: ${productId}` });
     }
 
     // Log selected product details
     logger.info("Selected product details:", {
-      productType,
+      productId,
       credits: selectedTier.credits,
       amount: selectedTier.amount,
-      priceId,
     });
 
-
-    // Create payment intent
+    // Create the payment intent
+    logger.info("Creating payment intent...");
     paymentIntent = await stripe.paymentIntents.create({
       amount: selectedTier.amount,
       currency: "usd",
@@ -353,7 +349,6 @@ app.post("/purchase-pack", async (req, res) => {
       },
     });
 
-    // Log payment intent creation
     logger.info("Payment intent created successfully:", { paymentIntentId: paymentIntent.id });
 
     // Update credits with retry mechanism
@@ -369,24 +364,33 @@ app.post("/purchase-pack", async (req, res) => {
         paymentIntentId: paymentIntent.id,
       });
 
-      // Still return success but flag for admin attention
-      res.status(200).send({
+      // Return success but flag for admin attention
+      return res.status(200).json({
         message: "Payment processed successfully. Credits may take a few minutes to appear.",
         remainingCredits: await getUserCredits(email),
         requiresVerification: true,
       });
-      return;
     }
 
     // Success response
-    res.status(200).send({
+    res.status(200).json({
       message: "Credits purchased successfully.",
       remainingCredits: newCredits,
     });
   } catch (err) {
     logger.error(`Error purchasing credits for ${email}:`, err);
 
-    // If payment was processed but credits failed
+    // Handle Stripe-specific errors
+    if (err.type === "StripeCardError") {
+      return res.status(400).json({
+        error: {
+          message: "Your card was declined. Please try a different payment method.",
+          code: err.code,
+        },
+      });
+    }
+
+    // Handle critical errors where payment succeeded but credits failed
     if (paymentIntent?.status === "succeeded") {
       logger.error("CRITICAL: Payment succeeded but credits failed to update", {
         email,
@@ -394,29 +398,17 @@ app.post("/purchase-pack", async (req, res) => {
         error: err.message,
       });
 
-      res.status(500).send({
+      return res.status(500).json({
         error: {
           message: "Payment processed but credits may be delayed. Our team has been notified.",
           paymentIntentId: paymentIntent.id,
           requiresSupport: true,
         },
       });
-      return;
-    }
-
-    // Handle Stripe-specific errors
-    if (err.type === "StripeCardError") {
-      res.status(400).send({
-        error: {
-          message: "Your card was declined. Please try a different payment method.",
-          code: err.code,
-        },
-      });
-      return;
     }
 
     // General error response
-    res.status(400).send({
+    res.status(400).json({
       error: {
         message: err.message || "Purchase failed. Please try again.",
       },
@@ -424,34 +416,38 @@ app.post("/purchase-pack", async (req, res) => {
   }
 });
 
+
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
-  const { email, productType } = req.body; // Use `productType` instead of `priceId`
+  const { email, productId } = req.body; // Use `productId` instead of `priceId`
 
-  logger.info("Creating checkout session for:", { email, productType });
+  logger.info("Creating checkout session for:", { email, productId });
 
   // Define credit tiers and their details
   const creditTiers = {
-    basic3: { amount: 200, credits: 3 },
-    basic10: { amount: 597, credits: 10 },
-    basic50: { amount: 1997, credits: 50 },
-    popular150: { amount: 4997, credits: 150 },
-    premium500: { amount: 11997, credits: 500 },
-    premium1000: { amount: 19997, credits: 1000 },
-    premium1750: { amount: 27997, credits: 1750 },
+    prod_basic3: { amount: 200, credits: 3 },
+    prod_basic10: { amount: 597, credits: 10 },
+    prod_basic50: { amount: 1997, credits: 50 },
+    prod_popular150: { amount: 4997, credits: 150 },
+    prod_premium500: { amount: 11997, credits: 500 },
+    prod_premium1000: { amount: 19997, credits: 1000 },
+    prod_premium1750: { amount: 27997, credits: 1750 },
   };
 
   try {
     // Validate request data
-    if (!email || !productType) {
-      logger.error("Missing required fields:", { email, productType });
-      return res.status(400).send({ error: "Email and product type are required" });
+    if (!email || !productId) {
+      logger.error("Missing required fields:", { email, productId });
+      return res.status(400).send({ error: "Email and productId are required" });
     }
 
-    // Validate product type
-    if (!creditTiers[productType] || !stripePriceIDs[productType]) {
-      logger.error("Invalid product type:", productType);
-      return res.status(400).send({ error: "Invalid product type" });
+    // Validate productId
+    const priceId = stripePriceIDs[productId]; // Map productId to priceId
+    const credits = creditTiers[productId]?.credits; // Map productId to credits
+
+    if (!priceId || !credits) {
+      logger.error("Invalid productId or missing mappings:", { productId });
+      return res.status(400).send({ error: "Invalid productId or missing mappings" });
     }
 
     // Look for an existing customer
@@ -471,8 +467,13 @@ app.post("/create-checkout-session", async (req, res) => {
       logger.info("Found existing customer:", customer.id);
     }
 
-    // Get the price ID from the centralized configuration
-    const priceId = stripePriceIDs[productType];
+    // Log the session creation details
+    logger.info("Creating Stripe Checkout Session with:", {
+      productId,
+      priceId,
+      credits,
+      email,
+    });
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
@@ -488,14 +489,14 @@ app.post("/create-checkout-session", async (req, res) => {
       payment_intent_data: {
         setup_future_usage: "off_session",
         metadata: {
-          credits: creditTiers[productType].credits,
+          credits: credits,
           userEmail: email,
         },
       },
-      success_url: `${FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${FRONTEND_URL}/dashboard?status=cancel`,
+      success_url: `${process.env.FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${process.env.FRONTEND_URL}/dashboard?status=cancel`,
       metadata: {
-        credits: creditTiers[productType].credits,
+        credits: credits,
         userEmail: email,
       },
       allow_promotion_codes: true,
@@ -518,7 +519,7 @@ app.post("/create-checkout-session", async (req, res) => {
       error: error.message,
       stack: error.stack,
       email: email,
-      productType: productType,
+      productId: productId,
     });
     res.status(500).send({
       error: "Failed to create checkout session",

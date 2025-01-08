@@ -3,34 +3,28 @@ frontend:
   phases:
     preBuild:
       commands:
-        - 'echo "Starting preBuild phase"'
+        - echo "Starting build process for environment: ${ENVIRONMENT}"
+        # Frontend setup
         - cd frontend
         - npm ci
         - npm install -g react-scripts
-        - 'echo "Environment Variables during preBuild:"'
-        - "printenv | grep REACT_APP_"
+        # Backend setup
         - cd ../backend
         - npm ci
-        - 'echo "Environment Variables during backend setup:"'
-        - "printenv | grep REACT_APP_"
         - cd ../frontend
     build:
       commands:
-        - 'echo "Building frontend"'
-        - 'echo "Current environment: ${ENVIRONMENT}"'
-        - |
-          if [ "${ENVIRONMENT}" = "testing" ]; then
-            echo "Building for testing environment"
-            CI=false npm run build:testing
-          else
-            echo "Building for production environment"
-            CI=false npm run build:production
-          fi
-        - 'echo "Frontend build completed"'
-        - 'echo "Environment Variables after frontend build:"'
-        - "printenv | grep REACT_APP_"
+        # Frontend build
+        - echo "Building frontend for ${ENVIRONMENT} environment"
+        - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
+        # Environment validation
+        - echo "Environment check:"
+        - echo "NODE_ENV: ${NODE_ENV}"
+        - echo "REACT_APP_NODE_ENV: ${REACT_APP_NODE_ENV}"
+        - echo "REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}"
+        - echo "Stripe configuration exists: ${REACT_APP_STRIPE_TEST_PRICE_ID_BASIC_50:+yes}"
+        # Backend build
         - cd ../backend
-        - 'echo "Building backend"'
         - mkdir -p dist
         - cp server.js server-config.js package.json dist/
         - cd dist && npm install --omit=dev
