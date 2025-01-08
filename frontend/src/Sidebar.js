@@ -57,7 +57,9 @@ const Sidebar = ({ email, onSignOut }) => {
       top: 0,
       left: 0,
       borderRight: "1px solid #e5e7eb",
-      overflowY: "auto"
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column"
     }}>
       <div style={{ 
         marginBottom: "20px",
@@ -68,7 +70,7 @@ const Sidebar = ({ email, onSignOut }) => {
           src="/logo.png"
           alt="Logo"
           style={{
-            width: "150px",
+            width: "180px", // Reverted to a smaller size
             height: "auto",
           }}
         />
@@ -137,6 +139,25 @@ const Sidebar = ({ email, onSignOut }) => {
           <LogOut style={iconStyle(false)} />
           <span style={{ flex: 1, textAlign: "left" }}>Sign Out</span>
         </button>
+      </div>
+
+      {/* Footer Section */}
+      <div style={{
+        marginTop: "auto",
+        textAlign: "center",
+        paddingTop: "20px",
+        borderTop: "1px solid #e5e7eb",
+      }}>
+        <a href="https://collectability.ai" target="_blank" rel="noopener noreferrer">
+          <img
+            src="/collectability-logo.png"
+            alt="CollectABILITY Logo"
+            style={{ width: "120px", height: "auto", display: "block", margin: "0 auto" }}
+          />
+        </a>
+        <p style={{ fontSize: "12px", color: "#6b7280", margin: "8px auto 0", textAlign: "center" }}>
+          A CollectABILITY Solution
+        </p>
       </div>
     </div>
   );
