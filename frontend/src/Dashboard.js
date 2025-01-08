@@ -3,7 +3,7 @@ import axios from "axios";
 import SearchHistory from "./SearchHistory";
 import { jwtDecode } from "jwt-decode";
 import SuccessModal from './SuccessModal';
-import stripePriceIDs from "./lib/stripeConfig";
+import config from './config';
 
 const Dashboard = ({ token, email }) => {
   // State declarations
@@ -203,26 +203,27 @@ const handleQuickBuy = async () => {
     setProcessing(true);
 
     // Log the payload for debugging
-    console.log("Sending purchase request with payload:", {
-      email: userEmail,
-      productType: "basic50", // Changed from priceId to productType
-      paymentMethodId: defaultPaymentMethod.id
-    });
+console.log("Sending purchase request with payload:", {
+  email: userEmail,
+  productId: "prod_basic50", // Updated to productId
+  paymentMethodId: defaultPaymentMethod.id
+});
 
-    const response = await axios.post(
-      `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
-      {
-        email: userEmail,
-        productType: "basic50", // Changed from priceId to productType
-        paymentMethodId: defaultPaymentMethod.id
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      }
-    );
+const response = await axios.post(
+  `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
+  {
+    email: userEmail,
+    productId: "prod_basic50", // Updated to productId
+    paymentMethodId: defaultPaymentMethod.id
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    }
+  }
+);
+
 
     console.log("Purchase Response:", response.data);
     setRemainingCredits(response.data.remainingCredits);
@@ -236,39 +237,45 @@ const handleQuickBuy = async () => {
   }
 };
 
-const handleStripeCheckout = async (productType) => {
+const handleStripeCheckout = async () => {
   try {
-    // Dynamically load the price ID for the selected product type
-    const priceId = stripePriceIDs[productType];
+    console.log("Initiating Stripe Checkout...");
 
-    if (!priceId) {
-      throw new Error(`Price ID not found for product type: ${productType}`);
+    // Get the default product (50 credits pack)
+    const defaultProduct = config.PRODUCT_TO_PRICE_MAP.basic50;
+
+    if (!defaultProduct || !defaultProduct.productId) {
+      throw new Error('Default product configuration not found or invalid');
     }
 
+    console.log("Using productId for checkout:", defaultProduct.productId);
+
+    // Send only the productId to the backend
     const response = await axios.post(
-      `${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`,
+      `${config.API_BASE_URL}/create-checkout-session`,
       {
-        email: userEmail,
-        priceId,
+        email: userEmail, // Ensure email is correctly populated
+        productId: defaultProduct.productId, // Pass only productId
       },
       {
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+          Authorization: `Bearer ${token}` // Include authorization if required
+        }
       }
     );
 
+    // Redirect to Stripe Checkout
     if (response.data.url) {
       window.location.href = response.data.url;
     } else {
-      throw new Error("No checkout URL received");
+      throw new Error('No checkout URL returned');
     }
   } catch (error) {
-    console.error("Error initiating checkout:", error);
-    setError("Failed to initiate checkout. Please try again.");
+    console.error("Error initiating Stripe Checkout:", error);
+    alert("Failed to initiate checkout. Please try again.");
   }
 };
+
 
   const handleAddPaymentMethod = async () => {
     try {
