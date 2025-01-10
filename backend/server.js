@@ -895,17 +895,20 @@ app.post("/use-search", async (req, res) => {
     logger.info("Payload prepared for external API:", { payload, requestID });
 
     // Step 5: Prepare and sign the API request
-    const request = new HttpRequest({
-      hostname: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
-      path: "/SandBox/enrichandvalidatev2",
-      method: "POST",
-      body: JSON.stringify(payload),
-      headers: {
-        "Content-Type": "application/json",
-        Host: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
-        "x-api-key": process.env.API_KEY, // Include the API key
-      },
-    });
+const url = new URL(process.env.API_ENDPOINT); // Parse the API endpoint from the environment variable
+
+const request = new HttpRequest({
+  hostname: url.hostname, // Extract hostname from the URL
+  path: url.pathname,     // Extract path from the URL
+  method: "POST",
+  body: JSON.stringify(payload),
+  headers: {
+    "Content-Type": "application/json",
+    Host: url.hostname,
+    "x-api-key": process.env.API_KEY, // Include the API key
+  },
+});
+
 
   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
 const signer = new SignatureV4({
