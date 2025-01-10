@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.0.5"
-$description = "Updated Backend Endpoint. Fixed Primary Validated logic. localhost fully functional."
+$version = "v2.0.6"
+$description = "Updated sidebar. Started to make responsive. localhost fully functional."
 
 # Add all changes
 git add .

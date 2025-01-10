@@ -16,23 +16,24 @@ const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [email, setEmail] = useState("");
   const [sessionToken, setSessionToken] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-  const getToken = async () => {
-    if (isLoggedIn) {
-      try {
-        const session = await fetchAuthSession();
-        const idToken = session?.tokens?.idToken?.toString();
-        setSessionToken(idToken);
-        console.log("Fetched sessionToken:", idToken); // Debugging log
-      } catch (error) {
-        console.error("Error getting session:", error);
-        setSessionToken(null);
+    const getToken = async () => {
+      if (isLoggedIn) {
+        try {
+          const session = await fetchAuthSession();
+          const idToken = session?.tokens?.idToken?.toString();
+          setSessionToken(idToken);
+          console.log("Fetched sessionToken:", idToken);
+        } catch (error) {
+          console.error("Error getting session:", error);
+          setSessionToken(null);
+        }
       }
-    }
-  };
-  getToken();
-}, [isLoggedIn]);
+    };
+    getToken();
+  }, [isLoggedIn]);
 
   useEffect(() => {
     checkUser();
@@ -79,100 +80,128 @@ const App = () => {
     }
   };
 
-// Loading check: Ensure email and sessionToken are initialized
   if (isLoggedIn && (!email || !sessionToken)) {
     return <div>Loading...</div>;
   }
 
-return (
- <div style={{ 
-    background: "linear-gradient(to bottom right, #eef2f6, #d1dde9)",
-    minHeight: "100vh",
-    display: "flex",
-    width: "100%",
-    position: "relative"
-  }}>
+  return (
+    <div className="flex min-h-screen w-full relative bg-gradient-to-br from-[#eef2f6] to-[#d1dde9]">
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundImage: "url(./network-bg.svg)",
+        backgroundPosition: "center right",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
+        opacity: 0.25,
+        zIndex: 0
+      }} />
 
-    {/* Background Overlay */}
-    <div style={{
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundImage: `url("/network-bg.svg")`,
-      backgroundPosition: "center right",
-      backgroundRepeat: "no-repeat",
-      backgroundSize: "cover",
-      opacity: 0.25,  // Reduced opacity to 25%
-      zIndex: 0
-    }} />
+      {isLoggedIn && (
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            {isMobileMenuOpen ? (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            ) : (
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            )}
+          </svg>
+        </button>
+      )}
 
-{/* Sidebar Navigation */}
-{isLoggedIn && (
-  <Sidebar email={email} onSignOut={handleSignOut} />
-)}
-       
-    {/* Main Content */}
-    <div style={{ 
-      position: "relative", 
-      zIndex: 1, 
-      flex: 1,
-      padding: "20px"
-    }}>
-      <Routes>
-        {/* Your existing Routes */}
-        <Route
-          path="/"
-          element={isLoggedIn ? <Navigate to="/dashboard" /> : <Navigate to="/signup" />}
+      {isLoggedIn && (
+        <div
+          className={`fixed lg:static inset-0 z-40 transform ${
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:translate-x-0 transition-transform duration-300 ease-in-out`}
+        >
+          <Sidebar email={email} onSignOut={handleSignOut} />
+        </div>
+      )}
+
+      <div className="flex-1 relative z-10 p-5 lg:p-8">
+        <div className="max-w-7xl mx-auto">
+          <Routes>
+            <Route
+              path="/"
+              element={isLoggedIn ? <Navigate to="/dashboard" /> : <Navigate to="/signup" />}
+            />
+            <Route
+              path="/signup"
+              element={isLoggedIn ? <Navigate to="/dashboard" /> : <Signup />}
+            />
+            <Route
+              path="/login"
+              element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login />}
+            />
+            <Route path="/verify" element={<VerifyEmail />} />
+            <Route
+              path="/dashboard"
+              element={
+                isLoggedIn ? (
+                  <Dashboard token={sessionToken} email={email} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/search"
+              element={
+                isLoggedIn ? <InputForm userEmail={email} /> : <Navigate to="/login" />
+              }
+            />
+            <Route
+              path="/purchase-credits"
+              element={
+                isLoggedIn ? (
+                  <PurchaseCredits userEmail={email} token={sessionToken} />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/results"
+              element={isLoggedIn ? <ResultsPage /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="*"
+              element={<Navigate to={isLoggedIn ? "/dashboard" : "/signup"} replace />}
+            />
+          </Routes>
+        </div>
+      </div>
+
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
         />
-        <Route
-          path="/signup"
-          element={isLoggedIn ? <Navigate to="/dashboard" /> : <Signup />}
-        />
-        <Route
-          path="/login"
-          element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login />}
-        />
-        <Route path="/verify" element={<VerifyEmail />} />
-        <Route
-          path="/dashboard"
-          element={
-            isLoggedIn ? (
-              <Dashboard token={sessionToken} email={email} />
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
-          path="/search"
-          element={
-            isLoggedIn ? <InputForm userEmail={email} /> : <Navigate to="/login" />
-          }
-        />
-        <Route
-          path="/purchase-credits"
-          element={
-            isLoggedIn ? (
-              <PurchaseCredits userEmail={email} token={sessionToken} />
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
-          path="/results"
-          element={isLoggedIn ? <ResultsPage /> : <Navigate to="/login" />}
-        />
-        <Route
-          path="*"
-          element={<Navigate to={isLoggedIn ? "/dashboard" : "/signup"} replace />}
-        />
-      </Routes>
+      )}
     </div>
-  </div>
-);
+  );
 };
 
 export default App;
