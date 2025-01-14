@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.0.8"
-$description = "Backend fix attempt - CORS issue. localhost fully functional."
+$version = "v2.1.0"
+$description = "reverted to working backend. local host functional. Issues with credit update for new purchases."
 
 # Add all changes
 git add .

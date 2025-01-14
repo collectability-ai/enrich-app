@@ -41,191 +41,6 @@ console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exi
 console.log("- AWS_REGION:", process.env.AWS_REGION);
 console.log("Allowed Origins for CORS:", allowedOrigins);
 
-// In server.js, after the console.logs but before async function getUserCredits
-// Track processed payments to prevent duplicates
-const processedPayments = new Set();
-
-// Enhanced Stripe Webhook Handler with Idempotency
-app.post(
-  '/webhook',
-  express.raw({ type: 'application/json' }),
-  async (request, response) => {
-    let event;
-    const sig = request.headers['stripe-signature'];
-
-    try {
-      event = stripe.webhooks.constructEvent(
-        request.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-
-      logger.info('Successfully constructed Stripe event:', {
-        type: event.type,
-        id: event.id,
-      });
-
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object;
-          const paymentIntentId = session.payment_intent;
-
-          // Skip if we've already processed this payment
-          if (processedPayments.has(paymentIntentId)) {
-            logger.info('Skipping duplicate payment processing:', { paymentIntentId });
-            return response.status(200).json({ received: true, skipped: true });
-          }
-
-          logger.info('Handling checkout.session.completed:', {
-            sessionId: session.id,
-            metadata: session.metadata,
-          });
-
-          try {
-            const customerEmail = session.metadata?.userEmail;
-            const creditsToAdd = parseInt(session.metadata?.credits, 10);
-
-            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              throw new Error('Invalid metadata in session');
-            }
-
-            // Mark this payment as processed before updating credits
-            processedPayments.add(paymentIntentId);
-
-            let currentCredits = 0;
-            try {
-              currentCredits = await getUserCredits(customerEmail);
-              logger.info('Fetched current credits:', { customerEmail, currentCredits });
-            } catch (error) {
-              logger.warn('No credit record found, initializing user record:', { customerEmail });
-              await initializeUserCredits(customerEmail);
-            }
-
-            const newTotalCredits = currentCredits + creditsToAdd;
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully:', {
-              customerEmail,
-              previousCredits: currentCredits,
-              addedCredits: creditsToAdd,
-              newTotalCredits
-            });
-          } catch (err) {
-            logger.error('Error processing checkout.session.completed:', {
-              error: err.message,
-              stack: err.stack,
-              sessionId: session.id
-            });
-            throw err;
-          }
-          break;
-        }
-
-        case 'payment_intent.succeeded': {
-          const paymentIntent = event.data.object;
-
-          // Skip if we've already processed this payment
-          if (processedPayments.has(paymentIntent.id)) {
-            logger.info('Skipping duplicate payment processing:', { paymentIntentId: paymentIntent.id });
-            return response.status(200).json({ received: true, skipped: true });
-          }
-
-          logger.info('Handling payment_intent.succeeded:', {
-            paymentIntentId: paymentIntent.id,
-            metadata: paymentIntent.metadata,
-          });
-
-          try {
-            const customerEmail = paymentIntent.metadata?.userEmail;
-            const creditsToAdd = parseInt(paymentIntent.metadata?.credits, 10);
-
-            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              throw new Error('Invalid metadata in payment intent');
-            }
-
-            // Mark this payment as processed
-            processedPayments.add(paymentIntent.id);
-
-            // Skip credit update if this is part of a checkout session
-            // (it will be handled by checkout.session.completed)
-            if (paymentIntent.metadata?.isCheckoutSession === 'true') {
-              logger.info('Skipping credit update for checkout session payment intent', {
-                paymentIntentId: paymentIntent.id
-              });
-              return response.status(200).json({ received: true });
-            }
-
-            const currentCredits = await getUserCredits(customerEmail);
-            const newTotalCredits = currentCredits + creditsToAdd;
-
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully after payment intent:', {
-              customerEmail,
-              previousCredits: currentCredits,
-              addedCredits: creditsToAdd,
-              newTotalCredits
-            });
-          } catch (err) {
-            logger.error('Error processing payment_intent.succeeded:', {
-              error: err.message,
-              stack: err.stack,
-              paymentIntentId: paymentIntent.id
-            });
-            throw err;
-          }
-          break;
-        }
-
-        case 'payment_intent.created':
-          // Ignore this event as it doesn't require credit updates
-          logger.info('Ignoring payment_intent.created event');
-          break;
-
-        default:
-          logger.info(`Unhandled event type: ${event.type}`);
-      }
-
-      response.status(200).json({ received: true });
-    } catch (err) {
-      logger.error('Webhook error:', {
-        error: err.message,
-        stack: err.stack,
-      });
-
-      response.status(400).send(`Webhook Error: ${err.message}`);
-    }
-  }
-);
-
-
-// Enhanced Initialize User Function
-async function initializeUserCredits(email) {
-  try {
-    const params = {
-      TableName: USER_CREDITS_TABLE,
-      Item: {
-        email,
-        credits: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      ConditionExpression: 'attribute_not_exists(email)',
-    };
-
-    await dynamoDBDocClient.send(new PutCommand(params));
-    logger.info(`Initialized new user: ${email}`);
-    return true;
-  } catch (error) {
-    if (error.name === 'ConditionalCheckFailedException') {
-      logger.info(`User ${email} already exists`);
-      return true;
-    }
-    logger.error('Error initializing user credits:', error);
-    return false;
-  }
-}
-
 // Enhanced Utility Functions
 async function getUserCredits(email) {
   if (!email) {
@@ -354,6 +169,97 @@ if (!creditTiers[productId] || !stripePriceIDs[productId]) {
 
  return creditTiers[productId];
 } 
+
+async function signUpUser(userData) {
+  const params = {
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
+    Username: userData.email,
+    Password: userData.password,
+    UserAttributes: [
+      { Name: "email", Value: userData.email },
+      { Name: "phone_number", Value: userData.phone },
+      { Name: "name", Value: userData.name },
+      { Name: "custom:companyName", Value: userData.companyName },
+      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
+      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
+      { Name: "custom:useCase", Value: userData.useCase },
+    ],
+  };
+
+  try {
+    logger.info(`Signing up user: ${userData.email}`);
+    return await cognitoClient.send(new SignUpCommand(params));
+  } catch (error) {
+    logger.error("Error signing up user:", error);
+    throw error;
+  }
+}
+
+// Stripe Webhook Handler
+app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
+  const sig = request.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      request.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    logger.error('Webhook signature verification failed:', err.message);
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the checkout.session.completed event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    
+    try {
+      const customerEmail = session.metadata.userEmail;
+      const creditsToAdd = parseInt(session.metadata.credits);
+      
+      // Fetch current credits
+      const currentCredits = await getUserCredits(customerEmail);
+      
+      // Update with new credits
+      await updateUserCredits(customerEmail, currentCredits + creditsToAdd);
+      
+      logger.info(`Credits updated after successful checkout: ${customerEmail} +${creditsToAdd}`);
+    } catch (error) {
+      logger.error('Error updating credits after checkout:', error);
+    }
+  }
+
+  response.json({received: true});
+});
+
+// Enhanced Initialize User Function
+async function initializeUserCredits(email) {
+  try {
+    const params = {
+      TableName: USER_CREDITS_TABLE,
+      Item: {
+        email,
+        credits: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      ConditionExpression: "attribute_not_exists(email)"
+    };
+
+    await dynamoDBDocClient.send(new PutCommand(params));
+    logger.info(`Initialized new user: ${email}`);
+    return true;
+  } catch (error) {
+    if (error.name === 'ConditionalCheckFailedException') {
+      logger.info(`User ${email} already exists`);
+      return true;
+    }
+    logger.error('Error initializing user credits:', error);
+    return false;
+  }
+}
 
 // Routes
 // Route: Secure Endpoint (Example for Token Validation)
@@ -517,61 +423,61 @@ app.post("/create-checkout-session", async (req, res) => {
 
   logger.info("Creating checkout session for:", { email, productId });
 
-  if (!email || !productId) {
-    logger.error("Missing required fields:", { email, productId });
-    return res.status(400).json({ error: "Email and product ID are required" });
-  }
+  // Define credit tiers and their details
+  const creditTiers = {
+    prod_basic3: { amount: 200, credits: 3 },
+    prod_basic10: { amount: 597, credits: 10 },
+    prod_basic50: { amount: 1997, credits: 50 },
+    prod_popular150: { amount: 4997, credits: 150 },
+    prod_premium500: { amount: 11997, credits: 500 },
+    prod_premium1000: { amount: 19997, credits: 1000 },
+    prod_premium1750: { amount: 27997, credits: 1750 },
+  };
 
   try {
-    // Customer Handling
-    let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: email,
-      limit: 1,
+    // Validate request data
+    if (!email || !productId) {
+      logger.error("Missing required fields:", { email, productId });
+      return res.status(400).send({ error: "Email and productId are required" });
+    }
+
+    // Validate productId
+    const priceId = stripePriceIDs[productId];
+    const credits = creditTiers[productId]?.credits;
+
+    if (!priceId || !credits) {
+      logger.error("Invalid productId or missing mappings:", { productId });
+      return res.status(400).send({ error: "Invalid productId or missing mappings" });
+    }
+
+    // Determine the correct frontend URL
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      (process.env.REACT_APP_ENVIRONMENT === "production"
+        ? "https://app.contactvalidate.com"
+        : "https://testing.contactvalidate.com");
+
+    // Look for or create a customer
+    const customers = await stripe.customers.list({ email });
+    let customer = customers.data[0];
+
+    if (!customer) {
+      customer = await stripe.customers.create({ email });
+      logger.info(`Created new customer: ${customer.id}`);
+    } else {
+      logger.info(`Found existing customer: ${customer.id}`);
+    }
+
+    // Log session creation details
+    logger.info("Creating Stripe Checkout Session with:", {
+      productId,
+      priceId,
+      credits,
+      email,
+      frontendUrl,
     });
 
-    if (existingCustomers.data.length === 0) {
-      customer = await stripe.customers.create({ email });
-      logger.info("Created new customer:", { customerId: customer.id, email });
-    } else {
-      customer = existingCustomers.data[0];
-      logger.info("Found existing customer:", { customerId: customer.id, email });
-    }
-
-    // Credit Tiers Definition
-    const creditTiers = {
-      prod_basic3: { amount: 200, credits: 3 },
-      prod_basic10: { amount: 597, credits: 10 },
-      prod_basic50: { amount: 1997, credits: 50 },
-      prod_popular150: { amount: 4997, credits: 150 },
-      prod_premium500: { amount: 11997, credits: 500 },
-      prod_premium1000: { amount: 19997, credits: 1000 },
-      prod_premium1750: { amount: 27997, credits: 1750 },
-    };
-
-    // Validate Product Configuration
-    const creditTier = creditTiers[productId];
-    if (!creditTier) {
-      logger.error("Invalid product ID:", { productId, email });
-      return res.status(400).json({ error: "Invalid product ID" });
-    }
-
-    const priceId = stripePriceIDs[productId];
-    if (!priceId) {
-      logger.error("Price ID not found:", { productId, email });
-      return res.status(400).json({ error: "Invalid product configuration" });
-    }
-
-    // Prepare Metadata
-    const metadata = {
-      credits: creditTier.credits.toString(),
-      userEmail: email,
-      productId: productId,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString()
-    };
-
-    // Create Checkout Session
+    // Create the checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ["card"],
@@ -579,75 +485,39 @@ app.post("/create-checkout-session", async (req, res) => {
         {
           price: priceId,
           quantity: 1,
-          adjustable_quantity: { enabled: false }
-        }
+        },
       ],
       mode: "payment",
-      metadata,
       payment_intent_data: {
-        metadata, // Include same metadata in payment intent
         setup_future_usage: "off_session",
-        capture_method: "automatic"
+        metadata: {
+          credits: credits,
+          userEmail: email,
+        },
       },
-      success_url: `${FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${FRONTEND_URL}/dashboard?status=cancel`,
+      success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${frontendUrl}/dashboard?status=cancel`,
       allow_promotion_codes: true,
       billing_address_collection: "required",
-      phone_number_collection: { enabled: true },
-      customer_update: { address: "auto" },
       submit_type: "pay",
-      custom_text: {
-        submit: {
-          message: `You will receive ${creditTier.credits} credits after successful payment.`
-        }
-      }
     });
 
-    // Log Success
-    logger.info("Checkout session created successfully", {
+    // Log successful session creation
+    logger.info("Checkout session created:", {
       sessionId: session.id,
       customerId: customer.id,
-      email,
-      productId,
-      credits: creditTier.credits,
-      metadata,
-      environment: process.env.NODE_ENV
+      email: email,
     });
 
-    // Return Success Response
-    return res.status(200).json({
-      url: session.url,
-      sessionId: session.id,
-      credits: creditTier.credits
-    });
-
+    res.status(200).json({ url: session.url, sessionId: session.id });
   } catch (error) {
-    // Error Logging
-    logger.error("Failed to create checkout session", {
+    logger.error("Error creating checkout session:", {
       error: error.message,
-      code: error.code,
-      type: error.type,
       stack: error.stack,
       email,
       productId,
-      timestamp: new Date().toISOString()
     });
-
-    // Error Response
-    const errorResponse = {
-      error: "Failed to create checkout session",
-      details: process.env.NODE_ENV === 'development' ? error.message : 'An error occurred during checkout',
-      code: error.code || 'UNKNOWN_ERROR'
-    };
-
-    // Error Status Code Selection
-    if (error.type === 'StripeCardError') {
-      return res.status(402).json(errorResponse);
-    } else if (error.type === 'StripeInvalidRequestError') {
-      return res.status(400).json(errorResponse);
-    }
-    
-    return res.status(500).json(errorResponse);
+    res.status(500).send({ error: "Failed to create checkout session", details: error.message });
   }
 });
 
@@ -1165,6 +1035,34 @@ app.post("/get-search-history", async (req, res) => {
   }
 });
 
+// Utility function to sign up a user in Cognito
+async function signUpUser(userData) {
+  const params = {
+    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
+    Username: userData.email,
+    Password: userData.password, // User-provided password
+    UserAttributes: [
+      { Name: "email", Value: userData.email },
+      { Name: "phone_number", Value: userData.phone },
+      { Name: "name", Value: userData.name },
+      { Name: "custom:companyName", Value: userData.companyName },
+      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
+      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
+      { Name: "custom:useCase", Value: userData.useCase },
+    ],
+  };
+
+  try {
+    // Create a SignUpCommand and send it to Cognito
+    const command = new SignUpCommand(params);
+    const response = await cognitoClient.send(command);
+    return response;
+  } catch (err) {
+    console.error("Error signing up user:", err);
+    throw err;
+  }
+}
+
 // Route: User Signup
 app.post("/signup", async (req, res) => {
   const {
@@ -1374,74 +1272,32 @@ app.use((req, res) => {
 // Import the file system module
 const fs = require('fs');
 
-// Static file handling and API routing
+// Static file handling
 if (isLambda) {
   // In Lambda, we only handle API routes
   app.all('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    logger.warn('Non-API route accessed in Lambda:', {
-      path: req.path,
-      method: req.method
-    });
-    res.status(404).json({ 
-      error: 'Not Found',
-      message: 'This endpoint is not available in the Lambda environment'
-    });
+    res.status(404).json({ error: 'Not Found' });
   });
 } else {
   // Local development static file serving
   const buildPath = path.join(__dirname, 'build');
-  
-  try {
-    if (fs.existsSync(buildPath)) {
-      logger.info(`Serving static files from: ${buildPath}`);
-      app.use(express.static(buildPath));
-      
-      // Handle client-side routing
-      app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api/')) {
-          return next();
-        }
-        res.sendFile(path.join(buildPath, 'index.html'), err => {
-          if (err) {
-            logger.error('Error sending index.html:', {
-              error: err.message,
-              path: req.path
-            });
-            res.status(500).send('Error loading application');
-          }
-        });
-      });
-    } else {
-      logger.warn(`Build directory not found at: ${buildPath}`);
-      // Continue without static file serving
-    }
-  } catch (error) {
-    logger.error('Error setting up static file serving:', {
-      error: error.message,
-      stack: error.stack
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(buildPath, 'index.html'));
+      }
     });
-    // Continue without static file serving
+  } else {
+    logger.warn('Build directory not found for local development');
   }
 }
 
-// Global error handler - should be the last middleware
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', {
-    error: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method
-  });
-
-  res.status(err.status || 500).json({
-    error: isProduction ? 'Internal Server Error' : err.message,
-    requestId: req.id,
-    path: req.path
-  });
-});
+// Log before starting the server
+console.log("Starting the server...");
 
 // Server startup and environment configuration
 if (!isLambda) {
@@ -1457,9 +1313,9 @@ if (!isLambda) {
 
   // Lambda event handler function
   exports.handler = async (event, context) => {
-    context.callbackWaitsForEmptyEventLoop = false;
+    context.callbackWaitsForEmptyEventLoop = false; // Prevent Lambda from waiting for the event loop to empty
 
-    const requestId = context.awsRequestId;
+    const requestId = context.awsRequestId; // Set up consistent logging context
     const logContext = {
       requestId,
       path: event.path || event.requestContext?.http?.path,
@@ -1485,7 +1341,7 @@ if (!isLambda) {
       const headers = {
         'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
           ? event.headers.origin
-          : (allowedOrigins?.[0] || '*'),
+          : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
         'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization',
         'Access-Control-Allow-Credentials': 'true',
@@ -1542,7 +1398,7 @@ if (!isLambda) {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
             ? event.headers.origin
-            : (allowedOrigins?.[0] || '*'),
+            : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
           'Access-Control-Allow-Credentials': 'true',
         },
         body: JSON.stringify({
@@ -1552,8 +1408,5 @@ if (!isLambda) {
         }),
       };
     }
-  };  // Close exports.handler
-}  // Close else block for Lambda handling
-
-// Export the app for testing purposes
-module.exports = app;
+  };
+}

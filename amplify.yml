@@ -21,8 +21,10 @@ frontend:
         - 'echo "Stripe configuration exists: ${REACT_APP_STRIPE_TEST_PRICE_ID_BASIC_50:+yes}"'
         - cd ../backend
         - mkdir -p dist
-        - cp server.js server-config.js package.json dist/
-        - cd dist && npm install --omit=dev
+        - cp server.js server-config.js package.json package-lock.json ./dist/
+        - cd dist
+        - 'if [ "${ENVIRONMENT}" = "testing" ]; then npm ci; else npm ci --production; fi'
+        - echo "exports.handler = require('./server.js').handler;" > index.js
         - 'echo "Backend build completed"'
         - 'echo "Final environment check"'
         - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
@@ -32,7 +34,12 @@ frontend:
     baseDirectory: frontend/build
     files:
       - '**/*'
-      - '../backend/dist/**/*'
+      - '../backend/dist/index.js'
+      - '../backend/dist/server.js'
+      - '../backend/dist/server-config.js'
+      - '../backend/dist/package.json'
+      - '../backend/dist/package-lock.json'
+      - '../backend/dist/node_modules/**/*'
   cache:
     paths:
       - node_modules/**/*
@@ -41,7 +48,7 @@ frontend:
       - /root/.npm/**/*
   customRules:
     - source: '/api/*'
-      target: '/backend/dist/server.js'
+      target: '/backend/dist/index.js'
       status: '200'
     - source: '/*'
       target: '/index.html'
