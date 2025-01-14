@@ -1374,59 +1374,74 @@ app.use((req, res) => {
 // Import the file system module
 const fs = require('fs');
 
-// Static file handling
+// Static file handling and API routing
 if (isLambda) {
   // In Lambda, we only handle API routes
   app.all('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    res.status(404).json({ error: 'Not Found' });
+    logger.warn('Non-API route accessed in Lambda:', {
+      path: req.path,
+      method: req.method
+    });
+    res.status(404).json({ 
+      error: 'Not Found',
+      message: 'This endpoint is not available in the Lambda environment'
+    });
   });
 } else {
   // Local development static file serving
   const buildPath = path.join(__dirname, 'build');
-  if (fs.existsSync(buildPath)) {
-    app.use(express.static(buildPath));
-    app.get('*', (req, res) => {
-      if (!req.path.startsWith('/api/')) {
-        res.sendFile(path.join(buildPath, 'index.html'));
-      }
-    });
-  } else {
-    logger.warn('Build directory not found for local development');
-  }
-}
-
-// Log before starting the server
-console.log("Starting the server...");
-
-// Static file handling
-if (isLambda) {
-  // In Lambda, we only handle API routes
-  app.all('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) {
-      return next();
+  
+  try {
+    if (fs.existsSync(buildPath)) {
+      logger.info(`Serving static files from: ${buildPath}`);
+      app.use(express.static(buildPath));
+      
+      // Handle client-side routing
+      app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api/')) {
+          return next();
+        }
+        res.sendFile(path.join(buildPath, 'index.html'), err => {
+          if (err) {
+            logger.error('Error sending index.html:', {
+              error: err.message,
+              path: req.path
+            });
+            res.status(500).send('Error loading application');
+          }
+        });
+      });
+    } else {
+      logger.warn(`Build directory not found at: ${buildPath}`);
+      // Continue without static file serving
     }
-    res.status(404).json({ error: 'Not Found' });
-  });
-} else {
-  // Local development static file serving
-  const buildPath = path.join(__dirname, 'build');
-  if (fs.existsSync(buildPath)) {
-    app.use(express.static(buildPath));
-    app.get('*', (req, res) => {
-      if (!req.path.startsWith('/api/')) {
-        res.sendFile(path.join(buildPath, 'index.html'));
-      }
+  } catch (error) {
+    logger.error('Error setting up static file serving:', {
+      error: error.message,
+      stack: error.stack
     });
-  } else {
-    logger.warn('Build directory not found for local development');
+    // Continue without static file serving
   }
 }
 
-// Log before starting the server
-console.log("Starting the server...");
+// Global error handler - should be the last middleware
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
+  });
+
+  res.status(err.status || 500).json({
+    error: isProduction ? 'Internal Server Error' : err.message,
+    requestId: req.id,
+    path: req.path
+  });
+});
 
 // Server startup and environment configuration
 if (!isLambda) {
