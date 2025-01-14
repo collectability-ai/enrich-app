@@ -1,7 +1,6 @@
 // Import required modules
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const winston = require('winston');
@@ -344,11 +343,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parser configuration with increased limit for file uploads
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
+// Body parser configuration
+app.use((req, res, next) => {
+  if (req.originalUrl === '/webhook') {
+    // Raw body parser for Stripe webhook
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    // JSON parser for all other routes
+    express.json({
+      limit: '10mb',
+      verify: (req, res, buf) => {
+        req.rawBody = buf;
+      }
+    })(req, res, next);
+  }
+});
 
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // Serve static files from React build
 if (process.env.NODE_ENV === 'production') {

@@ -3,7 +3,8 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.716.0",
     "@aws-sdk/client-dynamodb": "^3.716.0",
     "@aws-sdk/lib-dynamodb": "^3.716.0",
-    "aws-amplify": "^6.11.0"
+    "aws-amplify": "^6.11.0",
+    "body-parser": "^1.20.3"
   },
   "scripts": {
     "start": "node backend/server.js",
