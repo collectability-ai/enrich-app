@@ -198,40 +198,113 @@ async function signUpUser(userData) {
 // Stripe Webhook Handler
 app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
   const sig = request.headers['stripe-signature'];
+  
+  // Debug logging
+  logger.info('Webhook request received:', {
+    hasSignature: !!sig,
+    hasBody: !!request.body,
+    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    contentType: request.headers['content-type'],
+    bodyLength: request.body?.length
+  });
+
   let event;
 
   try {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
+    }
+
     event = stripe.webhooks.constructEvent(
       request.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
-  } catch (err) {
-    logger.error('Webhook signature verification failed:', err.message);
-    return response.status(400).send(`Webhook Error: ${err.message}`);
-  }
 
-  // Handle the checkout.session.completed event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    
-    try {
-      const customerEmail = session.metadata.userEmail;
-      const creditsToAdd = parseInt(session.metadata.credits);
-      
-      // Fetch current credits
-      const currentCredits = await getUserCredits(customerEmail);
-      
-      // Update with new credits
-      await updateUserCredits(customerEmail, currentCredits + creditsToAdd);
-      
-      logger.info(`Credits updated after successful checkout: ${customerEmail} +${creditsToAdd}`);
-    } catch (error) {
-      logger.error('Error updating credits after checkout:', error);
+    logger.info('Successfully constructed Stripe event:', {
+      type: event.type,
+      id: event.id
+    });
+
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const paymentIntentId = session.payment_intent;
+        
+        logger.info('Handling checkout.session.completed:', {
+          sessionId: session.id,
+          metadata: session.metadata,
+        });
+
+        try {
+          const customerEmail = session.metadata?.userEmail;
+          const creditsToAdd = parseInt(session.metadata?.credits, 10);
+
+          if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+            throw new Error('Invalid metadata in session');
+          }
+
+          let currentCredits = 0;
+          try {
+            currentCredits = await getUserCredits(customerEmail);
+            logger.info('Fetched current credits:', { customerEmail, currentCredits });
+          } catch (error) {
+            logger.warn('No credit record found, initializing user record:', { customerEmail });
+            await initializeUserCredits(customerEmail);
+          }
+
+          const newTotalCredits = currentCredits + creditsToAdd;
+          await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+          logger.info('Credits updated successfully:', {
+            customerEmail,
+            previousCredits: currentCredits,
+            addedCredits: creditsToAdd,
+            newTotalCredits,
+            paymentIntentId
+          });
+        } catch (err) {
+          logger.error('Error processing checkout completion:', {
+            error: err.message,
+            stack: err.stack,
+            sessionId: session.id
+          });
+          throw err;
+        }
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        logger.info('Payment intent succeeded:', {
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata
+        });
+        break;
+      }
+
+      case 'payment_intent.created':
+        // Log but skip processing
+        logger.info('Ignoring payment_intent.created event');
+        break;
+
+      default:
+        logger.info(`Unhandled event type: ${event.type}`);
     }
-  }
 
-  response.json({received: true});
+    response.status(200).json({ received: true });
+  } catch (err) {
+    logger.error('Webhook error:', {
+      error: err.message,
+      errorName: err.type,
+      stack: err.stack,
+      signature: sig?.slice(0, 20) + '...',  // Log part of signature safely
+      webhookSecretExists: !!process.env.STRIPE_WEBHOOK_SECRET,
+      webhookSecretLength: process.env.STRIPE_WEBHOOK_SECRET?.length
+    });
+
+    response.status(400).send(`Webhook Error: ${err.message}`);
+  }
 });
 
 // Enhanced Initialize User Function
@@ -479,28 +552,32 @@ app.post("/create-checkout-session", async (req, res) => {
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
-      customer: customer.id,
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      payment_intent_data: {
-        setup_future_usage: "off_session",
-        metadata: {
-          credits: credits,
-          userEmail: email,
-        },
-      },
-      success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${frontendUrl}/dashboard?status=cancel`,
-      allow_promotion_codes: true,
-      billing_address_collection: "required",
-      submit_type: "pay",
-    });
+  customer: customer.id,
+  payment_method_types: ["card"],
+  line_items: [
+    {
+      price: priceId,
+      quantity: 1,
+    },
+  ],
+  mode: "payment",
+  metadata: { // Add metadata at session level
+    credits: credits.toString(),
+    userEmail: email
+  },
+  payment_intent_data: {
+    metadata: { // Keep metadata in payment intent as well
+      credits: credits.toString(),
+      userEmail: email
+    },
+    setup_future_usage: "off_session"
+  },
+  success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+  cancel_url: `${frontendUrl}/dashboard?status=cancel`,
+  allow_promotion_codes: true,
+  billing_address_collection: "required",
+  submit_type: "pay"
+});
 
     // Log successful session creation
     logger.info("Checkout session created:", {
@@ -815,7 +892,7 @@ app.post("/add-credits", async (req, res) => {
 
     // Update credits
     const newCredits = currentCredits + creditsToAdd;
-    await updateUserCredits(email, newCredits);
+    await updateUserCreditsWithRetry(email, newCredits);
 
     // Respond with the updated credit count
     res.status(200).send({

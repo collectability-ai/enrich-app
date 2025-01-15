@@ -344,11 +344,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parser configuration with increased limit for file uploads
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
+// Body parser configuration
+app.use((req, res, next) => {
+  if (req.originalUrl === '/webhook') {
+    // Raw body parser for Stripe webhook
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    // JSON parser for all other routes
+    express.json({
+      limit: '10mb',
+      verify: (req, res, buf) => {
+        req.rawBody = buf;
+      }
+    })(req, res, next);
+  }
+});
 
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // Serve static files from React build
 if (process.env.NODE_ENV === 'production') {
@@ -416,34 +429,44 @@ async function getUserCredits(email) {
   }
 }
 
-async function updateUserCredits(email, credits) {
+async function updateUserCreditsWithRetry(email, credits, maxRetries = 3) {
   if (!email) {
     logger.error("No email provided to updateUserCredits");
     throw new Error("Email is required");
   }
 
-  const params = {
-    TableName: USER_CREDITS_TABLE,
-    Key: { email: email },
-    UpdateExpression: "SET credits = :credits",
-    ExpressionAttributeValues: { ":credits": credits },
-    ReturnValues: "UPDATED_NEW"
-  };
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      logger.info(`Attempt ${retries + 1}: Updating credits for user ${email} to ${credits}`);
+      
+      const params = {
+        TableName: USER_CREDITS_TABLE,
+        Key: { email },
+        UpdateExpression: "SET credits = :credits",
+        ExpressionAttributeValues: { ":credits": credits },
+        ReturnValues: "UPDATED_NEW"
+      };
 
-  try {
-    logger.info(`Updating credits for user ${email} to ${credits}`);
-    logger.info(`Using table: ${USER_CREDITS_TABLE}`); // Debug log
-    const result = await dynamoDBDocClient.send(new UpdateCommand(params));
-    logger.info(`Successfully updated credits for ${email}:`, result);
-    return result;
-  } catch (error) {
-    logger.error("Error updating user credits:", {
-      error: error.message,
-      email: email,
-      tableName: USER_CREDITS_TABLE,
-      credits: credits
-    });
-    throw error;
+      logger.info(`Using table: ${USER_CREDITS_TABLE}`);
+      const result = await dynamoDBDocClient.send(new UpdateCommand(params));
+      logger.info(`Successfully updated credits for ${email}:`, result);
+      return result;
+    } catch (error) {
+      logger.error(`Attempt ${retries + 1} failed:`, {
+        error: error.message,
+        email: email,
+        tableName: USER_CREDITS_TABLE,
+        credits: credits
+      });
+
+      retries++;
+      if (retries === maxRetries) {
+        throw new Error('Failed to update credits after multiple attempts');
+      }
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+    }
   }
 }
 
@@ -509,7 +532,7 @@ module.exports = {
   stripePriceIDs,
   signer,
   getUserCredits,
-  updateUserCredits,
+  updateUserCreditsWithRetry,
   logSearchHistory,
   signUpUser,
   CREDIT_COSTS,
