@@ -291,7 +291,7 @@ app.post("/create-checkout-session", async (req, res) => {
 
     if (existingCustomers.data.length === 0) {
       customer = await stripe.customers.create({ email });
-      logger.info("Created new customer:", { customerId: customer.id, email });
+      logger.info("Created new Stripe customer:", { customerId: customer.id, email });
     } else {
       customer = existingCustomers.data[0];
       logger.info("Found existing customer:", { customerId: customer.id, email });
@@ -321,8 +321,10 @@ app.post("/create-checkout-session", async (req, res) => {
       return res.status(400).json({ error: "Invalid product configuration" });
     }
 
-    // Determine the frontend URL for success/cancel redirects
-    const frontendUrl = FRONTEND_URL;
+    // Dynamically determine frontend URL based on request origin
+    const origin = req.headers.origin;
+    const frontendUrl = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    logger.info("Resolved frontendUrl for Stripe session:", frontendUrl);
 
     try {
       // Create Checkout Session
