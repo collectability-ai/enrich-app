@@ -11,328 +11,154 @@ const {
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
   allowedOrigins,
-  stripePriceIDs, // Import centralized Stripe Price IDs
+  stripePriceIDs,
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  signer,
+  getUserCredits,
+  updateUserCreditsWithRetry,
+  logSearchHistory,
+  signUpUser,
+  cognitoClient,
+  InitiateAuthCommand,
+  SignatureV4,
+  Sha256,
+  HttpRequest,
+  validateEnvironmentVariables,
+  initializeUserCredits,
+  verifyCreditsUpdate,
+  validatePurchaseRequest,
+  API_ENDPOINT
 } = require("./server-config");
 
+// Third-party dependencies
 const awsServerlessExpress = require('aws-serverless-express');
 const path = require("path");
-const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const axios = require("axios");
 
+
+
+// AWS SDK imports
 const {
-  DynamoDBDocumentClient,
   GetCommand,
   ScanCommand,
   UpdateCommand,
   PutCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
-// AWS SDK v3 imports for API signing
-const { HttpRequest } = require("@aws-sdk/protocol-http");
-const { SignatureV4 } = require("@aws-sdk/signature-v4");
-const { Sha256 } = require("@aws-crypto/sha256-browser");
-const axios = require("axios");
-
 // Debug logging for environment setup
-console.log("Starting server...");
-console.log("Environment:", process.env.NODE_ENV);
-console.log("AWS Configuration:");
-console.log("- AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
-console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
-console.log("- AWS_REGION:", process.env.AWS_REGION);
-console.log("Allowed Origins for CORS:", allowedOrigins);
-
-// Enhanced Utility Functions
-async function getUserCredits(email) {
-  if (!email) {
-    logger.error("No email provided to getUserCredits");
-    return 0;
-  }
-
-  const params = {
-    TableName: USER_CREDITS_TABLE,
-    Key: { email: email },
-  };
-
-  try {
-    logger.info(`Fetching credits for user: ${email}`);
-    const result = await dynamoDBDocClient.send(new GetCommand(params));
-    return result.Item ? result.Item.credits : 0;
-  } catch (error) {
-    logger.error("Error fetching user credits:", error);
-    return 0;
-  }
-}
-
-async function updateUserCreditsWithRetry(email, credits, maxRetries = 3) {
-  let retries = 0;
-  while (retries < maxRetries) {
-    try {
-      logger.info(`Attempt ${retries + 1}: Updating credits for user ${email} to ${credits}`);
-      await dynamoDBDocClient.send(
-        new UpdateCommand({
-          TableName: USER_CREDITS_TABLE,
-          Key: { email },
-          UpdateExpression: "SET credits = :credits",
-          ExpressionAttributeValues: { ":credits": credits },
-          ReturnValues: "UPDATED_NEW",
-        })
-      );
-      logger.info(`Successfully updated credits for ${email}`);
-      return true;
-    } catch (error) {
-      logger.error(`Attempt ${retries + 1} failed:`, error);
-      retries++;
-      if (retries === maxRetries) {
-        throw new Error('Failed to update credits after multiple attempts');
-      }
-      // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
-    }
-  }
-}
-
-async function verifyCreditsUpdate(email, expectedCredits, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    const currentCredits = await getUserCredits(email);
-    if (currentCredits === expectedCredits) {
-      return true;
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
-  }
-  return false;
-}
-
-async function logSearchHistory(
-  email,
-  searchQuery,
-  requestID,
-  status,
-  rawResponse = null,
-  EnVrequestID = null
-) {
-  const now = new Date();
-  const timestamp = new Date(now.getTime() - 7 * 60 * 60 * 1000).toISOString();
-
-  try {
-    logger.info(`Logging search history for ${email}, requestID: ${requestID}`);
-    await dynamoDBDocClient.send(
-      new PutCommand({
-        TableName: SEARCH_HISTORY_TABLE,
-        Item: {
-          requestID,
-          timestamp,
-          email,
-          EnVrequestID: EnVrequestID || "N/A",
-          searchQuery,
-          status,
-          rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A",
-        },
-      })
-    );
-    logger.info("Search history logged successfully:", { requestID, email });
-  } catch (error) {
-    logger.error("Error logging search history:", {
-      errorMessage: error.message,
-      requestID,
-      email,
-      stack: error.stack,
-    });
-    throw error;
-  }
-}
-
-async function validatePurchaseRequest(email, priceId, paymentMethodId) {
-  if (!email || !priceId || !paymentMethodId) {
-    throw new Error('Missing required fields');
-  }
-
-  // Verify user exists
-  const userCredits = await getUserCredits(email);
-  if (userCredits === null) {
-    await initializeUserCredits(email);
-  }
-
-  // Verify productType and retrieve details
- const creditTiers = {
-   basic3: { amount: 200, credits: 3 },
-   basic10: { amount: 597, credits: 10 },
-   basic50: { amount: 1997, credits: 50 },
-   popular150: { amount: 4997, credits: 150 },
-   premium500: { amount: 11997, credits: 500 },
-   premium1000: { amount: 19997, credits: 1000 },
-   premium1750: { amount: 27997, credits: 1750 },
- };
-
-if (!creditTiers[productId] || !stripePriceIDs[productId]) {
-  throw new Error("Invalid product type");
-}
-
- return creditTiers[productId];
-} 
-
-async function signUpUser(userData) {
-  const params = {
-    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
-    Username: userData.email,
-    Password: userData.password,
-    UserAttributes: [
-      { Name: "email", Value: userData.email },
-      { Name: "phone_number", Value: userData.phone },
-      { Name: "name", Value: userData.name },
-      { Name: "custom:companyName", Value: userData.companyName },
-      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
-      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
-      { Name: "custom:useCase", Value: userData.useCase },
-    ],
-  };
-
-  try {
-    logger.info(`Signing up user: ${userData.email}`);
-    return await cognitoClient.send(new SignUpCommand(params));
-  } catch (error) {
-    logger.error("Error signing up user:", error);
-    throw error;
-  }
-}
-
-// Stripe Webhook Handler
-app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
-  const sig = request.headers['stripe-signature'];
-  
-  // Debug logging
-  logger.info('Webhook request received:', {
-    hasSignature: !!sig,
-    hasBody: !!request.body,
-    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
-    contentType: request.headers['content-type'],
-    bodyLength: request.body?.length
-  });
-
-  let event;
-
-  try {
-    if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      throw new Error('STRIPE_WEBHOOK_SECRET is not configured');
-    }
-
-    event = stripe.webhooks.constructEvent(
-      request.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-
-    logger.info('Successfully constructed Stripe event:', {
-      type: event.type,
-      id: event.id
-    });
-
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object;
-        const paymentIntentId = session.payment_intent;
-        
-        logger.info('Handling checkout.session.completed:', {
-          sessionId: session.id,
-          metadata: session.metadata,
-        });
-
-        try {
-          const customerEmail = session.metadata?.userEmail;
-          const creditsToAdd = parseInt(session.metadata?.credits, 10);
-
-          if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-            throw new Error('Invalid metadata in session');
-          }
-
-          let currentCredits = 0;
-          try {
-            currentCredits = await getUserCredits(customerEmail);
-            logger.info('Fetched current credits:', { customerEmail, currentCredits });
-          } catch (error) {
-            logger.warn('No credit record found, initializing user record:', { customerEmail });
-            await initializeUserCredits(customerEmail);
-          }
-
-          const newTotalCredits = currentCredits + creditsToAdd;
-          await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-          logger.info('Credits updated successfully:', {
-            customerEmail,
-            previousCredits: currentCredits,
-            addedCredits: creditsToAdd,
-            newTotalCredits,
-            paymentIntentId
-          });
-        } catch (err) {
-          logger.error('Error processing checkout completion:', {
-            error: err.message,
-            stack: err.stack,
-            sessionId: session.id
-          });
-          throw err;
-        }
-        break;
-      }
-
-      case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object;
-        logger.info('Payment intent succeeded:', {
-          paymentIntentId: paymentIntent.id,
-          metadata: paymentIntent.metadata
-        });
-        break;
-      }
-
-      case 'payment_intent.created':
-        // Log but skip processing
-        logger.info('Ignoring payment_intent.created event');
-        break;
-
-      default:
-        logger.info(`Unhandled event type: ${event.type}`);
-    }
-
-    response.status(200).json({ received: true });
-  } catch (err) {
-    logger.error('Webhook error:', {
-      error: err.message,
-      errorName: err.type,
-      stack: err.stack,
-      signature: sig?.slice(0, 20) + '...',  // Log part of signature safely
-      webhookSecretExists: !!process.env.STRIPE_WEBHOOK_SECRET,
-      webhookSecretLength: process.env.STRIPE_WEBHOOK_SECRET?.length
-    });
-
-    response.status(400).send(`Webhook Error: ${err.message}`);
-  }
+logger.info("Server Configuration:", {
+  environment: ENVIRONMENT,
+  frontendUrl: FRONTEND_URL,
+  apiEndpoint: API_ENDPOINT,
+  aws: {
+    region: process.env.AWS_REGION,
+    hasAccessKeyId: !!process.env.AWS_ACCESS_KEY_ID,
+    hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+  },
+  isProduction,
+  isLambda,
+  corsOrigins: allowedOrigins
 });
 
-// Enhanced Initialize User Function
-async function initializeUserCredits(email) {
-  try {
-    const params = {
-      TableName: USER_CREDITS_TABLE,
-      Item: {
-        email,
-        credits: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      ConditionExpression: "attribute_not_exists(email)"
-    };
+// Enhanced Utility Functions
+// Enhanced Stripe Webhook Handler
+app.post(
+  '/webhook',
+  express.raw({ type: 'application/json' }),
+  async (request, response) => {
+    const sig = request.headers['stripe-signature'];
+    let event;
 
-    await dynamoDBDocClient.send(new PutCommand(params));
-    logger.info(`Initialized new user: ${email}`);
-    return true;
-  } catch (error) {
-    if (error.name === 'ConditionalCheckFailedException') {
-      logger.info(`User ${email} already exists`);
-      return true;
+    try {
+      // Convert raw body buffer to string for logging
+      const rawBody = request.body.toString('utf8');
+      logger.info('Received webhook payload:', { 
+        rawBody: rawBody.substring(0, 100) + '...',  // Log first 100 chars for debugging
+        signature: sig ? 'Present' : 'Missing'
+      });
+
+      event = stripe.webhooks.constructEvent(
+        request.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+
+      logger.info('Successfully constructed Stripe event:', {
+        type: event.type,
+        id: event.id
+      });
+
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object;
+          
+          logger.info('Processing checkout.session.completed:', {
+            sessionId: session.id,
+            metadata: session.metadata
+          });
+
+          try {
+            const customerEmail = session.metadata?.userEmail;
+            const creditsToAdd = parseInt(session.metadata?.credits, 10);
+
+            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+              throw new Error('Invalid metadata in session');
+            }
+
+            let currentCredits = 0;
+            try {
+              currentCredits = await getUserCredits(customerEmail);
+              logger.info('Current credits:', { customerEmail, currentCredits });
+            } catch (error) {
+              logger.warn('No credit record found, initializing user:', { customerEmail });
+              await initializeUserCredits(customerEmail);
+            }
+
+            const newTotalCredits = currentCredits + creditsToAdd;
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info('Credits updated successfully:', {
+              customerEmail,
+              previousCredits: currentCredits,
+              addedCredits: creditsToAdd,
+              newTotalCredits
+            });
+          } catch (err) {
+            logger.error('Error processing checkout.session.completed:', {
+              error: err.message,
+              stack: err.stack,
+              sessionId: session.id
+            });
+            throw err;
+          }
+          break;
+        }
+
+        case 'payment_intent.succeeded': {
+          logger.info('Received payment_intent.succeeded event - skipping as credits handled by checkout.session.completed');
+          break;
+        }
+
+        default:
+          logger.info(`Unhandled event type: ${event.type}`);
+      }
+
+      response.status(200).json({ received: true });
+    } catch (err) {
+      logger.error('Webhook error:', {
+        error: err.message,
+        stack: err.stack,
+        headers: request.headers,
+        rawBody: request.body.toString('utf8')
+      });
+
+      response.status(400).send(`Webhook Error: ${err.message}`);
     }
-    logger.error('Error initializing user credits:', error);
-    return false;
   }
-}
+);
+
 
 // Routes
 // Route: Secure Endpoint (Example for Token Validation)
@@ -345,38 +171,24 @@ app.post("/purchase-pack", async (req, res) => {
   const { email, productId, paymentMethodId } = req.body;
 
   // Log the incoming payload
-  logger.info("Received payload for purchase-pack:", { email, productId, paymentMethodId });
+  logger.info("Purchase pack request received:", { email, productId, paymentMethodId });
 
   let paymentIntent = null;
 
   try {
     // Validate required fields
-    logger.info("Validating request fields...");
     if (!email || !productId || !paymentMethodId) {
       logger.error("Missing required fields:", { email, productId, paymentMethodId });
       return res.status(400).json({ error: "Missing required fields: email, productId, or paymentMethodId" });
     }
 
-    // Log validated fields
-    logger.info("Request fields validated successfully:", { email, productId, paymentMethodId });
-
-    // Ensure the user exists in DynamoDB and initialize credits if not found
-    const currentCredits = await getUserCredits(email);
-    if (currentCredits === null) {
-      logger.info(`No credits found for ${email}. Initializing user in DynamoDB.`);
-      await initializeUserCredits(email);
-    }
-
     // Retrieve or create the Stripe customer
-    logger.info("Retrieving or creating Stripe customer...");
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
     if (!customer) {
       customer = await stripe.customers.create({ email });
-      logger.info("Created new customer in Stripe:", { customerId: customer.id });
-    } else {
-      logger.info("Found existing Stripe customer:", { customerId: customer.id });
+      logger.info("Created new Stripe customer:", { customerId: customer.id });
     }
 
     // Define credit tiers by productId
@@ -393,19 +205,15 @@ app.post("/purchase-pack", async (req, res) => {
     // Validate productId and retrieve the associated tier
     const selectedTier = creditTiersByProductId[productId];
     if (!selectedTier) {
-      logger.error("Invalid product ID provided:", { productId });
+      logger.error("Invalid product ID:", { productId });
       return res.status(400).json({ error: `Invalid product ID: ${productId}` });
     }
 
-    // Log selected product details
-    logger.info("Selected product details:", {
-      productId,
-      credits: selectedTier.credits,
-      amount: selectedTier.amount,
-    });
+    // Dynamically determine the frontend URL
+    const origin = req.headers.origin;
+    const frontendUrl = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 
-    // Create the payment intent
-    logger.info("Creating payment intent...");
+    // Create the payment intent with metadata for the webhook
     paymentIntent = await stripe.paymentIntents.create({
       amount: selectedTier.amount,
       currency: "usd",
@@ -415,6 +223,9 @@ app.post("/purchase-pack", async (req, res) => {
       metadata: {
         credits: selectedTier.credits,
         userEmail: email,
+        productId: productId,
+        environment: process.env.NODE_ENV,
+        timestamp: new Date().toISOString(),
       },
       automatic_payment_methods: {
         enabled: true,
@@ -422,36 +233,26 @@ app.post("/purchase-pack", async (req, res) => {
       },
     });
 
-    logger.info("Payment intent created successfully:", { paymentIntentId: paymentIntent.id });
+    logger.info("Payment intent created:", {
+      paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: selectedTier.amount,
+      credits: selectedTier.credits,
+    });
 
-    // Update credits with retry mechanism
-    const newCredits = (currentCredits || 0) + selectedTier.credits;
-    await updateUserCreditsWithRetry(email, newCredits);
-
-    // Verify credits were updated
-    const verified = await verifyCreditsUpdate(email, newCredits);
-    if (!verified) {
-      logger.error("Credits update verification failed", {
-        email,
-        expectedCredits: newCredits,
-        paymentIntentId: paymentIntent.id,
-      });
-
-      // Return success but flag for admin attention
-      return res.status(200).json({
-        message: "Payment processed successfully. Credits may take a few minutes to appear.",
-        remainingCredits: await getUserCredits(email),
-        requiresVerification: true,
-      });
-    }
-
-    // Success response
+    // Return initial success response
     res.status(200).json({
-      message: "Credits purchased successfully.",
-      remainingCredits: newCredits,
+      message: "Payment processed. Credits will be added shortly.",
+      paymentIntentId: paymentIntent.id,
+      credits: selectedTier.credits,
     });
   } catch (err) {
-    logger.error(`Error purchasing credits for ${email}:`, err);
+    logger.error("Error in purchase-pack:", {
+      error: err.message,
+      email,
+      productId,
+      paymentIntentId: paymentIntent?.id,
+    });
 
     // Handle Stripe-specific errors
     if (err.type === "StripeCardError") {
@@ -459,23 +260,6 @@ app.post("/purchase-pack", async (req, res) => {
         error: {
           message: "Your card was declined. Please try a different payment method.",
           code: err.code,
-        },
-      });
-    }
-
-    // Handle critical errors where payment succeeded but credits failed
-    if (paymentIntent?.status === "succeeded") {
-      logger.error("CRITICAL: Payment succeeded but credits failed to update", {
-        email,
-        paymentIntentId: paymentIntent.id,
-        error: err.message,
-      });
-
-      return res.status(500).json({
-        error: {
-          message: "Payment processed but credits may be delayed. Our team has been notified.",
-          paymentIntentId: paymentIntent.id,
-          requiresSupport: true,
         },
       });
     }
@@ -489,112 +273,133 @@ app.post("/purchase-pack", async (req, res) => {
   }
 });
 
-
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
   const { email, productId } = req.body;
 
   logger.info("Creating checkout session for:", { email, productId });
 
-  // Define credit tiers and their details
-  const creditTiers = {
-    prod_basic3: { amount: 200, credits: 3 },
-    prod_basic10: { amount: 597, credits: 10 },
-    prod_basic50: { amount: 1997, credits: 50 },
-    prod_popular150: { amount: 4997, credits: 150 },
-    prod_premium500: { amount: 11997, credits: 500 },
-    prod_premium1000: { amount: 19997, credits: 1000 },
-    prod_premium1750: { amount: 27997, credits: 1750 },
-  };
+  if (!email || !productId) {
+    logger.error("Missing required fields:", { email, productId });
+    return res.status(400).json({ error: "Email and product ID are required" });
+  }
 
   try {
-    // Validate request data
-    if (!email || !productId) {
-      logger.error("Missing required fields:", { email, productId });
-      return res.status(400).send({ error: "Email and productId are required" });
-    }
+    // Customer Handling
+    let customer;
+    const existingCustomers = await stripe.customers.list({ email, limit: 1 });
 
-    // Validate productId
-    const priceId = stripePriceIDs[productId];
-    const credits = creditTiers[productId]?.credits;
-
-    if (!priceId || !credits) {
-      logger.error("Invalid productId or missing mappings:", { productId });
-      return res.status(400).send({ error: "Invalid productId or missing mappings" });
-    }
-
-    // Determine the correct frontend URL
-    const frontendUrl =
-      process.env.FRONTEND_URL ||
-      (process.env.REACT_APP_ENVIRONMENT === "production"
-        ? "https://app.contactvalidate.com"
-        : "https://testing.contactvalidate.com");
-
-    // Look for or create a customer
-    const customers = await stripe.customers.list({ email });
-    let customer = customers.data[0];
-
-    if (!customer) {
+    if (existingCustomers.data.length === 0) {
       customer = await stripe.customers.create({ email });
-      logger.info(`Created new customer: ${customer.id}`);
+      logger.info("Created new customer:", { customerId: customer.id, email });
     } else {
-      logger.info(`Found existing customer: ${customer.id}`);
+      customer = existingCustomers.data[0];
+      logger.info("Found existing customer:", { customerId: customer.id, email });
     }
 
-    // Log session creation details
-    logger.info("Creating Stripe Checkout Session with:", {
-      productId,
-      priceId,
-      credits,
-      email,
-      frontendUrl,
-    });
+    // Credit Tiers Definition
+    const creditTiers = {
+      prod_basic3: { amount: 200, credits: 3 },
+      prod_basic10: { amount: 597, credits: 10 },
+      prod_basic50: { amount: 1997, credits: 50 },
+      prod_popular150: { amount: 4997, credits: 150 },
+      prod_premium500: { amount: 11997, credits: 500 },
+      prod_premium1000: { amount: 19997, credits: 1000 },
+      prod_premium1750: { amount: 27997, credits: 1750 },
+    };
 
-    // Create the checkout session
-    const session = await stripe.checkout.sessions.create({
-  customer: customer.id,
-  payment_method_types: ["card"],
-  line_items: [
-    {
-      price: priceId,
-      quantity: 1,
-    },
-  ],
-  mode: "payment",
-  metadata: { // Add metadata at session level
-    credits: credits.toString(),
-    userEmail: email
-  },
-  payment_intent_data: {
-    metadata: { // Keep metadata in payment intent as well
-      credits: credits.toString(),
-      userEmail: email
-    },
-    setup_future_usage: "off_session"
-  },
-  success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-  cancel_url: `${frontendUrl}/dashboard?status=cancel`,
-  allow_promotion_codes: true,
-  billing_address_collection: "required",
-  submit_type: "pay"
-});
+    // Validate Product Configuration
+    const creditTier = creditTiers[productId];
+    if (!creditTier) {
+      logger.error("Invalid product ID:", { productId, email });
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
 
-    // Log successful session creation
-    logger.info("Checkout session created:", {
-      sessionId: session.id,
-      customerId: customer.id,
-      email: email,
-    });
+    const priceId = stripePriceIDs[productId];
+    if (!priceId) {
+      logger.error("Price ID not found:", { productId, email });
+      return res.status(400).json({ error: "Invalid product configuration" });
+    }
 
-    res.status(200).json({ url: session.url, sessionId: session.id });
+    // Determine the frontend URL for success/cancel redirects
+    const frontendUrl = FRONTEND_URL;
+
+    try {
+      // Create Checkout Session
+      const session = await stripe.checkout.sessions.create({
+        customer: customer.id,
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+            adjustable_quantity: { enabled: false },
+          },
+        ],
+        mode: "payment",
+        metadata: {
+          credits: creditTier.credits.toString(),
+          userEmail: email,
+          productId: productId,
+          environment: ENVIRONMENT,
+          timestamp: new Date().toISOString(),
+        },
+        success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+        cancel_url: `${frontendUrl}/dashboard?status=cancel`,
+        allow_promotion_codes: true,
+        billing_address_collection: "required",
+        submit_type: "pay",
+      });
+
+      // Log successful session creation
+      logger.info("Checkout session created successfully", {
+        sessionId: session.id,
+        customerId: customer.id,
+        email,
+        productId,
+        credits: creditTier.credits,
+        frontendUrl,
+        environment: ENVIRONMENT,
+      });
+
+      // Return success response
+      return res.status(200).json({
+        url: session.url,
+        sessionId: session.id,
+        credits: creditTier.credits,
+      });
+    } catch (sessionError) {
+      // Log session creation error
+      logger.error("Failed to create checkout session", {
+        error: sessionError.message,
+        code: sessionError.code,
+        type: sessionError.type,
+        stack: sessionError.stack,
+        email,
+        productId,
+        environment: ENVIRONMENT,
+      });
+
+      // Return appropriate error response
+      return res.status(500).json({
+        error: "Failed to create checkout session",
+        details: isProduction
+          ? "An error occurred during checkout"
+          : sessionError.message,
+        environment: ENVIRONMENT,
+      });
+    }
   } catch (error) {
-    logger.error("Error creating checkout session:", {
+    // Log outer error
+    logger.error("Error in create-checkout-session route", {
       error: error.message,
       stack: error.stack,
-      email,
-      productId,
     });
-    res.status(500).send({ error: "Failed to create checkout session", details: error.message });
+
+    // Return general error response
+    return res.status(500).json({
+      error: "An unexpected error occurred",
+    });
   }
 });
 
@@ -971,64 +776,52 @@ app.post("/use-search", async (req, res) => {
 
     logger.info("Payload prepared for external API:", { payload, requestID });
 
-    // Step 5: Prepare and sign the API request
-const url = new URL(process.env.API_ENDPOINT); // Parse the API endpoint from the environment variable
+// Step 5: Prepare and sign the API request
+const url = new URL(process.env.API_ENDPOINT);
 
 const request = new HttpRequest({
-  hostname: url.hostname, // Extract hostname from the URL
-  path: url.pathname,     // Extract path from the URL
+  hostname: url.hostname,
+  path: url.pathname,
   method: "POST",
   body: JSON.stringify(payload),
   headers: {
     "Content-Type": "application/json",
     Host: url.hostname,
-    "x-api-key": process.env.API_KEY, // Include the API key
+    "x-api-key": process.env.API_KEY,
   },
 });
 
+// Use the shared signer from server-config.js
+const signedRequest = await signer.sign(request);
 
-  // Initialize the SignatureV4 signer with the SHA-256 hash constructor
-const signer = new SignatureV4({
-  service: "execute-api",
-  region: process.env.AWS_REGION, // Dynamic region from environment variables
-  credentials: {
-    accessKeyId: process.env.API_ACCESS_KEY_ID, // Custom environment variable for external API
-    secretAccessKey: process.env.API_SECRET_ACCESS_KEY, // Custom environment variable for external API
-  },
-  sha256: Sha256, // Explicit SHA-256 hash implementation
+// Log signed request headers for debugging
+logger.info("Signed request headers:", {
+  headers: signedRequest.headers,
 });
 
-    const signedRequest = await signer.sign(request);
+// Step 6: Make the signed API call
+let apiResponse;
+try {
+  logger.info("Sending signed request to external API...");
+  const response = await axios({
+    method: signedRequest.method,
+    url: `https://${signedRequest.hostname}${signedRequest.path}`,
+    headers: signedRequest.headers,
+    data: signedRequest.body,
+  });
 
-    // Log signed request headers for debugging
-    logger.info("Signed request headers:", {
-      headers: signedRequest.headers,
-    });
-
-    // Step 6: Make the signed API call
-    let apiResponse;
-    try {
-      logger.info("Sending signed request to external API...");
-      const response = await axios({
-        method: signedRequest.method,
-        url: `https://${signedRequest.hostname}${signedRequest.path}`,
-        headers: signedRequest.headers,
-        data: signedRequest.body,
-      });
-
-      apiResponse = response.data;
-      logger.info("Response received from external API:", { apiResponse, requestID });
-    } catch (apiError) {
-      logger.error("Error calling external API:", {
-        apiResponse: apiError.response?.data || null,
-        errorMessage: apiError.message,
-        requestID,
-      });
-      const errorMessage = "Failed to get valid data from the API.";
-      await logSearchHistory(email, searchQuery, requestID, errorMessage);
-      return res.status(500).send({ error: { message: errorMessage } });
-    }
-
+  apiResponse = response.data;
+  logger.info("Response received from external API:", { apiResponse, requestID });
+} catch (apiError) {
+  logger.error("Error calling external API:", {
+    apiResponse: apiError.response?.data || null,
+    errorMessage: apiError.message,
+    requestID,
+  });
+  const errorMessage = "Failed to get valid data from the API.";
+  await logSearchHistory(email, searchQuery, requestID, errorMessage);
+  return res.status(500).send({ error: { message: errorMessage } });
+}
     // Step 7: Deduct user credits
     await updateUserCreditsWithRetry(email, credits - creditCost);
 
@@ -1111,34 +904,6 @@ app.post("/get-search-history", async (req, res) => {
     res.status(500).send({ error: { message: "Internal Server Error" } });
   }
 });
-
-// Utility function to sign up a user in Cognito
-async function signUpUser(userData) {
-  const params = {
-    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
-    Username: userData.email,
-    Password: userData.password, // User-provided password
-    UserAttributes: [
-      { Name: "email", Value: userData.email },
-      { Name: "phone_number", Value: userData.phone },
-      { Name: "name", Value: userData.name },
-      { Name: "custom:companyName", Value: userData.companyName },
-      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
-      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
-      { Name: "custom:useCase", Value: userData.useCase },
-    ],
-  };
-
-  try {
-    // Create a SignUpCommand and send it to Cognito
-    const command = new SignUpCommand(params);
-    const response = await cognitoClient.send(command);
-    return response;
-  } catch (err) {
-    console.error("Error signing up user:", err);
-    throw err;
-  }
-}
 
 // Route: User Signup
 app.post("/signup", async (req, res) => {

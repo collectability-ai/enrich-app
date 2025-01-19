@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.1.1"
-$description = "Updated Stripe Webhook. local host functional. fixed credit update for new purchases in dev."
+$version = "v2.1.2"
+$description = "2.1.1 had allowedOrigin errors. Was not functional. Reworked and tested on localhost. Dev functional."
 
 # Add all changes
 git add .

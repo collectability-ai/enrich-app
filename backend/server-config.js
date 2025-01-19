@@ -16,43 +16,71 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const awsServerlessExpress = require('aws-serverless-express');
+const dotenv = require('dotenv');
 
-// Import dotenv to load environment variables
-const dotenv = require("dotenv");
+// =========================================
+// Environment Configuration
+// =========================================
 
-// Determine if running in AWS Lambda
+// Determine runtime environment
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Enhanced environment variable loading
+// Load environment variables
 if (!isLambda) {
   dotenv.config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
   console.log(`Loaded environment variables from .env.${process.env.NODE_ENV || 'development'}`);
 } else {
   console.log('Running in Lambda environment - using provided environment variables');
-  // Ensure critical environment variables are available in Lambda
   process.env.NODE_ENV = 'production';
 }
 
-// Ensure NODE_ENV is correctly set
 const ENVIRONMENT = process.env.NODE_ENV || (isLambda ? "production" : "development");
-
-// Determine if running in production
 const isProduction = ENVIRONMENT === "production";
 
-// Validate critical environment variables
+// =========================================
+// URL and CORS Configuration
+// =========================================
+
+// Frontend URL determination
+const getFrontendUrl = () => {
+  switch (process.env.NODE_ENV) {
+    case 'production':
+      return 'https://app.contactvalidate.com';
+    case 'testing':
+      return 'https://testing.contactvalidate.com';
+    default:
+      return 'http://localhost:3000';
+  }
+};
+
+const FRONTEND_URL = process.env.FRONTEND_URL || getFrontendUrl();
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : isProduction 
+    ? ['https://app.contactvalidate.com', 'https://testing.contactvalidate.com']
+    : ['http://localhost:3000'];
+
+// Validate CORS configuration
+if (!Array.isArray(allowedOrigins) || allowedOrigins.length === 0) {
+  throw new Error('ALLOWED_ORIGINS is not configured properly in the environment.');
+}
+
+// =========================================
+// Environment Validation
+// =========================================
+
 function validateEnvironmentVariables() {
   const requiredVars = [
-    "AWS_REGION", // Required for AWS services
-    "API_ENDPOINT", // Required for external API calls
-    "COGNITO_CLIENT_ID", // Cognito client ID for authentication
-    "COGNITO_USER_POOL_ID", // Cognito user pool ID
+    "AWS_REGION",
+    "API_ENDPOINT",
+    "COGNITO_CLIENT_ID",
+    "COGNITO_USER_POOL_ID",
+    "ALLOWED_ORIGINS"
   ];
 
-  // Add environment-specific variables
-  requiredVars.push("ALLOWED_ORIGINS"); // Required for CORS
-  requiredVars.push(isProduction ? "STRIPE_LIVE_SECRET_KEY" : "STRIPE_TEST_SECRET_KEY"); // Stripe secret key
+  requiredVars.push(isProduction ? "STRIPE_LIVE_SECRET_KEY" : "STRIPE_TEST_SECRET_KEY");
 
-  // Check for external API credentials in development
   if (!isProduction) {
     if (!process.env.API_ACCESS_KEY_ID || !process.env.API_SECRET_ACCESS_KEY) {
       console.warn(
@@ -71,33 +99,39 @@ function validateEnvironmentVariables() {
   console.log("Environment variables validated successfully.");
 }
 
-// Validate environment variables before proceeding
 validateEnvironmentVariables();
 
-// External API credentials (used explicitly in API calls)
+// =========================================
+// External API Configuration
+// =========================================
+
 const externalApiCredentials = {
   accessKeyId: process.env.API_ACCESS_KEY_ID,
   secretAccessKey: process.env.API_SECRET_ACCESS_KEY,
 };
 
-// Optional: Log for debugging
-console.log("Mapped Environment Variables:");
-console.log("AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Set" : "Missing");
-console.log("AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Set" : "Missing");
+// =========================================
+// AWS Configuration
+// =========================================
 
-// Dynamically assign STRIPE_SECRET_KEY based on environment
+const awsConfig = {
+  region: process.env.AWS_REGION,
+  credentials: isLambda ? fromEnv() : undefined,
+};
+
+// =========================================
+// Stripe Configuration
+// =========================================
+
 const stripeSecretKey = isProduction
   ? process.env.STRIPE_LIVE_SECRET_KEY
   : process.env.STRIPE_TEST_SECRET_KEY;
 
-// Initialize Stripe client and validate
 if (!stripeSecretKey) {
-  console.error("Stripe secret key is missing. Check environment variables.");
-  throw new Error("Stripe secret key is required for Stripe client initialization.");
+  throw new Error("Stripe secret key is required for initialization.");
 }
 
 const stripe = require("stripe")(stripeSecretKey);
-console.log("Stripe client initialized successfully.");
 
 const stripePriceIDs = {
   prod_basic3: process.env.NODE_ENV === 'development'
@@ -123,86 +157,30 @@ const stripePriceIDs = {
     : process.env.STRIPE_LIVE_PRICE_ID_PREMIUM_1750,
 };
 
-// Log the stripePriceIDs to confirm they are loaded correctly
-console.log("Loaded Stripe Price IDs:", stripePriceIDs);
+// =========================================
+// Debug Logging
+// =========================================
 
-// Add Frontend URL determination
-const getFrontendUrl = () => {
-  switch (process.env.NODE_ENV) {
-    case 'production':
-      return 'https://app.contactvalidate.com';
-    case 'testing':
-      return 'https://testing.contactvalidate.com';
-    default:
-      return 'http://localhost:3000';
+console.log('Configuration Summary:', {
+  Environment: {
+    NODE_ENV: process.env.NODE_ENV,
+    isLambda,
+    isProduction,
+  },
+  URLs: {
+    FRONTEND_URL,
+    allowedOrigins,
+  },
+  AWS: {
+    region: awsConfig.region,
+    hasCredentials: !!awsConfig.credentials,
+  },
+  Stripe: {
+    initialized: !!stripe,
+    environment: isProduction ? "production" : "testing/development",
+    hasPriceIDs: Object.keys(stripePriceIDs).length
   }
-};
-
-// Configure Frontend URL with fallback
-const FRONTEND_URL = process.env.FRONTEND_URL || getFrontendUrl();
-
-// Log the determined URL for debugging
-console.log('Frontend URL Configuration:', {
-  NODE_ENV: process.env.NODE_ENV,
-  FRONTEND_URL: FRONTEND_URL,
-  PROVIDED_URL: process.env.FRONTEND_URL,
-  DETERMINED_URL: getFrontendUrl()
 });
-
-// Define allowed origins based on environment
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : isProduction 
-    ? ['https://app.contactvalidate.com', 'https://testing.contactvalidate.com']
-    : ['http://localhost:3000'];
-
-// Validate allowedOrigins
-if (!Array.isArray(allowedOrigins) || allowedOrigins.length === 0) {
-  throw new Error('ALLOWED_ORIGINS is not configured properly in the environment.');
-}
-
-// Log for debugging
-console.log("Allowed Origins:", allowedOrigins);
-
-// Log environment and configuration state
-console.log("Environment and Configuration State:", {
-  isLambda,
-  ENVIRONMENT,
-  isProduction,
-  ALLOWED_ORIGINS: allowedOrigins,
-  API_ENDPOINT: process.env.API_ENDPOINT,
-  STRIPE_SECRET_KEY_EXISTS: !!stripeSecretKey,
-  AWS_REGION: process.env.AWS_REGION,
-  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ? "Set" : "Missing",
-  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ? "Set" : "Missing",
-});
-
-// Execute validation and get AWS config
-validateEnvironmentVariables();
-
-const awsConfig = {
-  region: process.env.AWS_REGION,
-  // Use IAM Role Credentials in Lambda, or undefined for local development
-  credentials: isLambda
-    ? fromEnv() // Use IAM role in Lambda
-    : undefined, // No explicit credentials in local development
-};
-
-// Debugging logs for AWS Config
-console.log("AWS Configuration:");
-console.log(`Region: ${awsConfig.region}`);
-if (awsConfig.credentials && awsConfig.credentials.accessKeyId && awsConfig.credentials.secretAccessKey) {
-  console.log("Access Key ID exists:", awsConfig.credentials.accessKeyId ? "Set" : "Missing");
-  console.log("Secret Access Key exists:", awsConfig.credentials.secretAccessKey ? "Set" : "Missing");
-} else {
-  console.log("No explicit credentials configured for AWS SDK.");
-}
-
-// Log final configuration
-console.log("AWS Configuration Loaded:");
-console.log(`Region: ${awsConfig.region}`);
-console.log(`Using IAM Role Credentials in Lambda: ${isLambda}`);
-console.log(`Stripe initialized for ${isProduction ? "production" : "testing/development"} environment`);
 
 // Export configuration and key variables for use across the app
 module.exports = {
@@ -522,27 +500,117 @@ async function signUpUser(userData) {
   }
 }
 
-// Export necessary items
+// Initialize User Credits Function
+async function initializeUserCredits(email) {
+  try {
+    const params = {
+      TableName: USER_CREDITS_TABLE,
+      Item: {
+        email,
+        credits: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      ConditionExpression: 'attribute_not_exists(email)',
+    };
+
+    await dynamoDBDocClient.send(new PutCommand(params));
+    logger.info(`Initialized new user: ${email}`);
+    return true;
+  } catch (error) {
+    if (error.name === 'ConditionalCheckFailedException') {
+      logger.info(`User ${email} already exists`);
+      return true;
+    }
+    logger.error('Error initializing user credits:', error);
+    return false;
+  }
+}
+
+// Verify Credits Update Function
+async function verifyCreditsUpdate(email, expectedCredits, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const currentCredits = await getUserCredits(email);
+    if (currentCredits === expectedCredits) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+  }
+  return false;
+}
+
+// Validate Purchase Request Function
+async function validatePurchaseRequest(email, priceId, paymentMethodId) {
+  if (!email || !priceId || !paymentMethodId) {
+    throw new Error('Missing required fields');
+  }
+
+  // Verify user exists
+  const userCredits = await getUserCredits(email);
+  if (userCredits === null) {
+    await initializeUserCredits(email);
+  }
+
+  // Credit tiers definition
+  const creditTiers = {
+    prod_basic3: { amount: 200, credits: 3 },
+    prod_basic10: { amount: 597, credits: 10 },
+    prod_basic50: { amount: 1997, credits: 50 },
+    prod_popular150: { amount: 4997, credits: 150 },
+    prod_premium500: { amount: 11997, credits: 500 },
+    prod_premium1000: { amount: 19997, credits: 1000 },
+    prod_premium1750: { amount: 27997, credits: 1750 }
+  };
+
+  if (!creditTiers[priceId] || !stripePriceIDs[priceId]) {
+    throw new Error('Invalid product ID');
+  }
+
+  return creditTiers[priceId];
+}
+
+
 module.exports = {
+  // Core modules
   app,
   express,
+  awsConfig,
   logger,
+
+  // Authentication & Payment
   verifyToken,
   stripe,
   stripePriceIDs,
   signer,
+
+  // Utility functions
   getUserCredits,
   updateUserCreditsWithRetry,
   logSearchHistory,
   signUpUser,
+  validateEnvironmentVariables,
+  initializeUserCredits,
+  verifyCreditsUpdate,
+  validatePurchaseRequest,
+  getFrontendUrl,
+
+  // Constants & Tables
   CREDIT_COSTS,
-  dynamoDBDocClient,
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
+
+  // AWS Services & Commands
+  dynamoDBDocClient,
   cognitoClient,
   InitiateAuthCommand,
   Sha256,
   HttpRequest,
+
+  // Environment & Configuration
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  allowedOrigins,
   FRONTEND_URL,
-  getFrontendUrl
+  API_ENDPOINT: process.env.API_ENDPOINT
 };
