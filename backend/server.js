@@ -75,10 +75,11 @@ app.post(
       // Convert raw body buffer to string for logging
       const rawBody = request.body.toString('utf8');
       logger.info('Received webhook payload:', { 
-        rawBody: rawBody.substring(0, 100) + '...',  // Log first 100 chars for debugging
+        rawBody: rawBody.substring(0, 100) + '...', // Log first 100 chars for debugging
         signature: sig ? 'Present' : 'Missing'
       });
 
+      // Verify Stripe event signature
       event = stripe.webhooks.constructEvent(
         request.body,
         sig,
@@ -90,10 +91,11 @@ app.post(
         id: event.id
       });
 
+      // Process events
       switch (event.type) {
         case 'checkout.session.completed': {
           const session = event.data.object;
-          
+
           logger.info('Processing checkout.session.completed:', {
             sessionId: session.id,
             metadata: session.metadata
@@ -104,27 +106,35 @@ app.post(
             const creditsToAdd = parseInt(session.metadata?.credits, 10);
 
             if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+              logger.error('Invalid metadata in checkout session:', { customerEmail, creditsToAdd });
               throw new Error('Invalid metadata in session');
             }
 
+            logger.info('Valid metadata received:', { customerEmail, creditsToAdd });
+
             let currentCredits = 0;
+
+            // Fetch user credits
             try {
               currentCredits = await getUserCredits(customerEmail);
-              logger.info('Current credits:', { customerEmail, currentCredits });
+              logger.info('Current credits fetched:', { customerEmail, currentCredits });
             } catch (error) {
-              logger.warn('No credit record found, initializing user:', { customerEmail });
+              logger.warn('User not found, initializing user:', { customerEmail });
               await initializeUserCredits(customerEmail);
             }
 
+            // Update user credits
             const newTotalCredits = currentCredits + creditsToAdd;
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully:', {
+            logger.info('Updating user credits:', {
               customerEmail,
               previousCredits: currentCredits,
               addedCredits: creditsToAdd,
               newTotalCredits
             });
+
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info('Credits updated successfully:', { customerEmail, newTotalCredits });
           } catch (err) {
             logger.error('Error processing checkout.session.completed:', {
               error: err.message,
@@ -142,7 +152,7 @@ app.post(
         }
 
         default:
-          logger.info(`Unhandled event type: ${event.type}`);
+          logger.warn('Unhandled event type:', event.type);
       }
 
       response.status(200).json({ received: true });

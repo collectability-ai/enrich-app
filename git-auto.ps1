@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.1.3"
-$description = "Fixed allowedOrigin error. Reverted back to create.checkout.session not adding credits properly. Otherwise functional."
+$version = "v2.1.4"
+$description = "Fixed credit addition on new purchases. testing deployment functional."
 
 # Add all changes
 git add .
