@@ -5,11 +5,14 @@ import config from "./config"; // Ensure price mappings are imported correctly
 const PurchaseCredits = ({ userEmail, token }) => {
   const [remainingCredits, setRemainingCredits] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState({ isOpen: false, message: "" });
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPack, setSelectedPack] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [error] = useState(null);
+
+const [loadingCredits, setLoadingCredits] = useState(false);
+
 
   // Define credit packs using config.PRODUCT_TO_PRICE_MAP
 const creditPacks = Object.values(config.PRODUCT_TO_PRICE_MAP).map((pack) => ({
@@ -22,31 +25,35 @@ const creditPacks = Object.values(config.PRODUCT_TO_PRICE_MAP).map((pack) => ({
 
 
   // Step 1: Fetch the current user's remaining credits
-  useEffect(() => {
-    const fetchCredits = async () => {
-      try {
-        console.log("Fetching remaining credits...");
-        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/check-credits`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ email: userEmail }),
-        });
+const fetchCredits = async () => {
+  setLoadingCredits(true); // Start the spinner
+  try {
+    console.log("Fetching remaining credits...");
+    const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/check-credits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ email: userEmail }),
+    });
 
-        if (response.ok) {
-          const data = await response.json();
-          setRemainingCredits(data.credits);
-          console.log("Remaining credits fetched successfully:", data.credits);
-        }
-      } catch (error) {
-        console.error("Error fetching credits:", error);
-      }
-    };
+    if (response.ok) {
+      const data = await response.json();
+      setRemainingCredits(data.credits);
+      console.log("Remaining credits fetched successfully:", data.credits);
+    }
+  } catch (error) {
+    console.error("Error fetching credits:", error);
+  } finally {
+    setLoadingCredits(false); // Stop the spinner
+  }
+};
 
-    fetchCredits();
-  }, [userEmail, token]);
+// Call fetchCredits when the component mounts or when dependencies change
+useEffect(() => {
+  fetchCredits();
+}, [userEmail, token]);
 
   // Step 2: Handle the purchase of a credit pack
 const handleBuyPack = async (pack) => {
@@ -101,7 +108,7 @@ const handleConfirmPurchase = async () => {
     console.log("Confirming purchase for:", {
       email: userEmail,
       paymentMethodId: paymentMethod?.id,
-      productId: selectedPack?.productId, // Reverted to productId
+      productId: selectedPack?.productId,
     });
 
     const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/purchase-pack`, {
@@ -113,7 +120,7 @@ const handleConfirmPurchase = async () => {
       body: JSON.stringify({
         email: userEmail,
         paymentMethodId: paymentMethod?.id,
-        productId: selectedPack?.productId, // Reverted to productId
+        productId: selectedPack?.productId,
       }),
     });
 
@@ -125,20 +132,29 @@ const handleConfirmPurchase = async () => {
     const purchaseData = await response.json();
     console.log("Purchase successful:", purchaseData);
 
-    alert(`Successfully purchased ${selectedPack?.credits} credits!`);
+    // Step: Fetch updated credits
+    await fetchCredits();
+
     setShowConfirmModal(false);
-  } catch (error) {
-    console.error("Error processing purchase:", {
-      message: error.message,
-      paymentMethod,
-      selectedPack,
-    });
+
+setShowSuccessModal({
+  isOpen: true,
+  message: `Successfully purchased ${selectedPack?.credits} credits!`,
+});
+} catch (error) {
+  console.error("Error processing purchase:", {
+    message: error.message,
+    paymentMethod,
+    selectedPack,
+  });
+
 
     alert(`Error: ${error.message || "Failed to process purchase. Please try again."}`);
   } finally {
     setIsProcessing(false);
   }
 };
+
 
 // Step 4: Redirect to Stripe Checkout if no payment methods exist
 const handleStripeCheckout = async (productId) => {
@@ -277,14 +293,17 @@ const handleStripeCheckout = async (productId) => {
           Current Credits
         </h3>
         <p style={{ 
-          fontSize: "36px", 
-          fontWeight: "bold",
-          color: "#214B8C",
-          margin: 0,
-          lineHeight: 1
-        }}>
-          {remainingCredits !== null ? remainingCredits : "Loading..."}
-        </p>
+  fontSize: "36px", 
+  fontWeight: "bold",
+  color: "#214B8C",
+  margin: 0,
+  lineHeight: 1
+}}>
+  {loadingCredits ? (
+    <span className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#214B8C]" />
+  ) : remainingCredits !== null ? remainingCredits : "N/A"}
+</p>
+
       </div>
 
       <div style={{
@@ -447,9 +466,9 @@ const handleStripeCheckout = async (productId) => {
 
 {/* Success Modal */}
 <SuccessModal
-  isOpen={showSuccessModal}
-  onClose={() => setShowSuccessModal(false)}
-  remainingCredits={remainingCredits}
+  isOpen={showSuccessModal.isOpen}
+  onClose={() => setShowSuccessModal({ isOpen: false, message: "" })}
+  message={showSuccessModal.message}
 />
 
 </div>

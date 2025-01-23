@@ -72,14 +72,7 @@ app.post(
     let event;
 
     try {
-      // Convert raw body buffer to string for logging
-      const rawBody = request.body.toString('utf8');
-      logger.info('Received webhook payload:', { 
-        rawBody: rawBody.substring(0, 100) + '...', // Log first 100 chars for debugging
-        signature: sig ? 'Present' : 'Missing'
-      });
-
-      // Verify Stripe event signature
+      // Verify and construct the event
       event = stripe.webhooks.constructEvent(
         request.body,
         sig,
@@ -88,86 +81,192 @@ app.post(
 
       logger.info('Successfully constructed Stripe event:', {
         type: event.type,
-        id: event.id
+        id: event.id,
       });
 
-      // Process events
       switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object;
+       case "checkout.session.completed": {
+  const session = event.data.object;
 
-          logger.info('Processing checkout.session.completed:', {
+  logger.info("Processing checkout.session.completed:", {
+    sessionId: session.id,
+    metadata: session.metadata,
+  });
+
+  try {
+    const customerEmail = session.metadata?.userEmail;
+    const creditsToAdd = parseInt(session.metadata?.credits, 10);
+    const paymentIntentId = session.payment_intent;
+
+    if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+      throw new Error("Invalid metadata in session");
+    }
+
+    // Step 1: Retrieve Payment Intent and Payment Method
+    let paymentMethodId;
+    if (paymentIntentId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        paymentMethodId = paymentIntent.payment_method;
+
+        if (paymentMethodId) {
+          logger.info("Retrieved payment method:", { paymentMethodId });
+
+          // Check if the payment method is already attached to the customer
+          const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+
+          if (paymentMethod.customer !== session.customer) {
+            // Attach payment method to customer if not already attached
+            logger.info("Attaching payment method to customer:", {
+              paymentMethodId,
+              customerId: session.customer,
+            });
+
+            await stripe.paymentMethods.attach(paymentMethodId, {
+              customer: session.customer,
+            });
+
+            // Set payment method as default
+            await stripe.customers.update(session.customer, {
+              invoice_settings: { default_payment_method: paymentMethodId },
+            });
+
+            logger.info("Default payment method updated successfully.");
+          } else {
+            logger.info("Payment method is already attached to the customer.");
+          }
+        } else {
+          logger.warn("No payment method found to attach for session:", {
             sessionId: session.id,
-            metadata: session.metadata
+          });
+        }
+      } catch (error) {
+        logger.error("Error attaching or setting default payment method:", {
+          error: error.message,
+        });
+      }
+    } else {
+      logger.warn("No payment method available to attach or set as default.");
+    }
+
+    // Step 2: Update User Credits
+    let currentCredits = 0;
+    try {
+      currentCredits = await getUserCredits(customerEmail);
+      logger.info("Current credits:", { customerEmail, currentCredits });
+    } catch (error) {
+      logger.warn("No credit record found, initializing user:", { customerEmail });
+      await initializeUserCredits(customerEmail);
+    }
+
+    const newTotalCredits = currentCredits + creditsToAdd;
+    await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+    logger.info("Credits updated successfully:", {
+      customerEmail,
+      previousCredits: currentCredits,
+      addedCredits: creditsToAdd,
+      newTotalCredits,
+    });
+
+    // Step 3: Log Payment History
+    if (typeof logPaymentHistory === "function") {
+      await logPaymentHistory(customerEmail, {
+        productId: session.metadata?.productId || "Unknown",
+        credits: creditsToAdd || "N/A",
+        amount: session.amount_total / 100, // Amount in dollars
+        status: "succeeded",
+        sessionId: session.id,
+      });
+    } else {
+      logger.error("logPaymentHistory function is not defined.");
+    }
+  } catch (err) {
+    logger.error("Error processing checkout.session.completed:", {
+      error: err.message,
+      stack: err.stack,
+      sessionId: session.id,
+    });
+    throw err;
+  }
+  break;
+}
+
+
+        case "payment_intent.succeeded": {
+          const paymentIntent = event.data.object;
+
+          logger.info("Processing payment_intent.succeeded:", {
+            paymentIntentId: paymentIntent.id,
+            metadata: paymentIntent.metadata,
           });
 
+          // Skip processing if handled by `checkout.session.completed`
+          if (paymentIntent.metadata?.fromCheckoutSession) {
+            logger.info(
+              "Skipping payment_intent.succeeded as credits handled by checkout.session.completed",
+              { paymentIntentId: paymentIntent.id }
+            );
+            break;
+          }
+
           try {
-            const customerEmail = session.metadata?.userEmail;
-            const creditsToAdd = parseInt(session.metadata?.credits, 10);
+            const customerEmail = paymentIntent.metadata?.userEmail;
+            const creditsToAdd = parseInt(paymentIntent.metadata?.credits, 10);
 
             if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              logger.error('Invalid metadata in checkout session:', { customerEmail, creditsToAdd });
-              throw new Error('Invalid metadata in session');
+              throw new Error("Invalid metadata in payment intent");
             }
 
-            logger.info('Valid metadata received:', { customerEmail, creditsToAdd });
-
             let currentCredits = 0;
-
-            // Fetch user credits
             try {
               currentCredits = await getUserCredits(customerEmail);
-              logger.info('Current credits fetched:', { customerEmail, currentCredits });
+              logger.info("Current credits:", { customerEmail, currentCredits });
             } catch (error) {
-              logger.warn('User not found, initializing user:', { customerEmail });
+              logger.warn("No credit record found, initializing user:", {
+                customerEmail,
+              });
               await initializeUserCredits(customerEmail);
             }
 
-            // Update user credits
             const newTotalCredits = currentCredits + creditsToAdd;
-            logger.info('Updating user credits:', {
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info("Credits updated successfully:", {
               customerEmail,
               previousCredits: currentCredits,
               addedCredits: creditsToAdd,
-              newTotalCredits
+              newTotalCredits,
             });
-
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully:', { customerEmail, newTotalCredits });
           } catch (err) {
-            logger.error('Error processing checkout.session.completed:', {
+            logger.error("Error processing payment_intent.succeeded:", {
               error: err.message,
               stack: err.stack,
-              sessionId: session.id
+              paymentIntentId: paymentIntent.id,
             });
             throw err;
           }
           break;
         }
 
-        case 'payment_intent.succeeded': {
-          logger.info('Received payment_intent.succeeded event - skipping as credits handled by checkout.session.completed');
-          break;
-        }
-
         default:
-          logger.warn('Unhandled event type:', event.type);
+          logger.warn(`Unhandled event type: ${event.type}`);
       }
 
       response.status(200).json({ received: true });
     } catch (err) {
-      logger.error('Webhook error:', {
+      logger.error("Webhook error:", {
         error: err.message,
         stack: err.stack,
         headers: request.headers,
-        rawBody: request.body.toString('utf8')
+        rawBody: request.body.toString('utf8'),
       });
 
       response.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
 );
+
 
 
 // Routes
@@ -223,25 +322,31 @@ app.post("/purchase-pack", async (req, res) => {
     const origin = req.headers.origin;
     const frontendUrl = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 
+    // Log selected tier details
+    logger.info("Selected tier details:", selectedTier);
+
     // Create the payment intent with metadata for the webhook
-    paymentIntent = await stripe.paymentIntents.create({
-      amount: selectedTier.amount,
-      currency: "usd",
-      customer: customer.id,
-      payment_method: paymentMethodId,
-      confirm: true,
-      metadata: {
-        credits: selectedTier.credits,
-        userEmail: email,
-        productId: productId,
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString(),
-      },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never",
-      },
-    });
+paymentIntent = await stripe.paymentIntents.create({
+  amount: selectedTier.amount,
+  currency: "usd",
+  customer: customer.id,
+  payment_method: paymentMethodId,
+  confirm: true,
+  metadata: {
+    credits: selectedTier.credits.toString(),
+    userEmail: email,
+    productId: productId,
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    fromCheckoutSession: false, // Indicates this is not from checkout.session
+  },
+  automatic_payment_methods: {
+    enabled: true,
+    allow_redirects: "never",
+  },
+});
+
+
 
     logger.info("Payment intent created:", {
       paymentIntentId: paymentIntent.id,
@@ -250,11 +355,18 @@ app.post("/purchase-pack", async (req, res) => {
       credits: selectedTier.credits,
     });
 
-    // Return initial success response
+    // Update user's credits in the database
+    const currentCredits = await getUserCredits(email);
+    const newTotalCredits = currentCredits + selectedTier.credits;
+
+    await updateUserCreditsWithRetry(email, newTotalCredits);
+    logger.info("User credits updated successfully:", { email, newTotalCredits });
+
+    // Return the updated credit balance in the response
     res.status(200).json({
-      message: "Payment processed. Credits will be added shortly.",
+      message: "Payment processed successfully.",
       paymentIntentId: paymentIntent.id,
-      credits: selectedTier.credits,
+      remainingCredits: newTotalCredits,
     });
   } catch (err) {
     logger.error("Error in purchase-pack:", {
@@ -283,135 +395,125 @@ app.post("/purchase-pack", async (req, res) => {
   }
 });
 
+
+// Route: Create Checkout Session
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
   const { email, productId } = req.body;
 
   logger.info("Creating checkout session for:", { email, productId });
 
-  if (!email || !productId) {
-    logger.error("Missing required fields:", { email, productId });
-    return res.status(400).json({ error: "Email and product ID are required" });
-  }
+  // Define credit tiers and their details
+  const creditTiers = {
+    prod_basic3: { amount: 200, credits: 3 },
+    prod_basic10: { amount: 597, credits: 10 },
+    prod_basic50: { amount: 1997, credits: 50 },
+    prod_popular150: { amount: 4997, credits: 150 },
+    prod_premium500: { amount: 11997, credits: 500 },
+    prod_premium1000: { amount: 19997, credits: 1000 },
+    prod_premium1750: { amount: 27997, credits: 1750 },
+  };
 
   try {
-    // Customer Handling
+    // Validate request data
+    if (!email || !productId) {
+      logger.error("Missing required fields:", { email, productId });
+      return res.status(400).send({ error: "Email and productId are required" });
+    }
+
+    // Validate productId
+    const priceId = stripePriceIDs[productId];
+    const creditTier = creditTiers[productId];
+    if (!priceId || !creditTier) {
+      logger.error("Invalid productId or missing mappings:", { productId });
+      return res.status(400).send({ error: "Invalid productId or missing mappings" });
+    }
+
+    const { amount, credits } = creditTier;
+
+    // Determine the correct frontend URL
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      (process.env.REACT_APP_ENVIRONMENT === "production"
+        ? "https://app.contactvalidate.com"
+        : "https://testing.contactvalidate.com");
+
+    // Look for or create a customer
     let customer;
     const existingCustomers = await stripe.customers.list({ email, limit: 1 });
-
     if (existingCustomers.data.length === 0) {
       customer = await stripe.customers.create({ email });
-      logger.info("Created new Stripe customer:", { customerId: customer.id, email });
+      logger.info(`Created new customer: ${customer.id}`);
     } else {
       customer = existingCustomers.data[0];
-      logger.info("Found existing customer:", { customerId: customer.id, email });
+      logger.info(`Found existing customer: ${customer.id}`);
     }
 
-    // Credit Tiers Definition
-    const creditTiers = {
-      prod_basic3: { amount: 200, credits: 3 },
-      prod_basic10: { amount: 597, credits: 10 },
-      prod_basic50: { amount: 1997, credits: 50 },
-      prod_popular150: { amount: 4997, credits: 150 },
-      prod_premium500: { amount: 11997, credits: 500 },
-      prod_premium1000: { amount: 19997, credits: 1000 },
-      prod_premium1750: { amount: 27997, credits: 1750 },
-    };
+    // Log session creation details
+    logger.info("Preparing to create Stripe Checkout Session with:", {
+      productId,
+      priceId,
+      amount,
+      credits,
+      email,
+      frontendUrl,
+    });
 
-    // Validate Product Configuration
-    const creditTier = creditTiers[productId];
-    if (!creditTier) {
-      logger.error("Invalid product ID:", { productId, email });
-      return res.status(400).json({ error: "Invalid product ID" });
-    }
-
-    const priceId = stripePriceIDs[productId];
-    if (!priceId) {
-      logger.error("Price ID not found:", { productId, email });
-      return res.status(400).json({ error: "Invalid product configuration" });
-    }
-
-    // Dynamically determine frontend URL based on request origin
-    const origin = req.headers.origin;
-    const frontendUrl = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-    logger.info("Resolved frontendUrl for Stripe session:", frontendUrl);
-
-    try {
-      // Create Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        customer: customer.id,
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-            adjustable_quantity: { enabled: false },
-          },
-        ],
-        mode: "payment",
+    // Create the checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customer.id,
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      payment_intent_data: {
+        setup_future_usage: "off_session", // Save payment method for future use
         metadata: {
-          credits: creditTier.credits.toString(),
+          credits: credits.toString(),
           userEmail: email,
           productId: productId,
-          environment: ENVIRONMENT,
+          environment: process.env.REACT_APP_ENVIRONMENT || "development",
           timestamp: new Date().toISOString(),
         },
-        success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-        cancel_url: `${frontendUrl}/dashboard?status=cancel`,
-        allow_promotion_codes: true,
-        billing_address_collection: "required",
-        submit_type: "pay",
-      });
+      },
+      metadata: {
+        credits: credits.toString(),
+        userEmail: email,
+        productId: productId,
+        environment: process.env.REACT_APP_ENVIRONMENT || "development",
+        timestamp: new Date().toISOString(),
+      },
+      success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${frontendUrl}/dashboard?status=cancel`,
+      allow_promotion_codes: true,
+      billing_address_collection: "required",
+      submit_type: "pay",
+    });
 
-      // Log successful session creation
-      logger.info("Checkout session created successfully", {
-        sessionId: session.id,
-        customerId: customer.id,
-        email,
-        productId,
-        credits: creditTier.credits,
-        frontendUrl,
-        environment: ENVIRONMENT,
-      });
+    // Log successful session creation
+    logger.info("Checkout session created successfully:", {
+      sessionId: session.id,
+      customerId: customer.id,
+      email,
+      credits,
+      productId,
+    });
 
-      // Return success response
-      return res.status(200).json({
-        url: session.url,
-        sessionId: session.id,
-        credits: creditTier.credits,
-      });
-    } catch (sessionError) {
-      // Log session creation error
-      logger.error("Failed to create checkout session", {
-        error: sessionError.message,
-        code: sessionError.code,
-        type: sessionError.type,
-        stack: sessionError.stack,
-        email,
-        productId,
-        environment: ENVIRONMENT,
-      });
-
-      // Return appropriate error response
-      return res.status(500).json({
-        error: "Failed to create checkout session",
-        details: isProduction
-          ? "An error occurred during checkout"
-          : sessionError.message,
-        environment: ENVIRONMENT,
-      });
-    }
+    // Send the session URL back to the client
+    res.status(200).json({ url: session.url, sessionId: session.id });
   } catch (error) {
-    // Log outer error
-    logger.error("Error in create-checkout-session route", {
+    // Log error details
+    logger.error("Error creating checkout session:", {
       error: error.message,
       stack: error.stack,
+      email,
+      productId,
     });
-
-    // Return general error response
-    return res.status(500).json({
-      error: "An unexpected error occurred",
-    });
+    res.status(500).send({ error: "Failed to create checkout session", details: error.message });
   }
 });
 
@@ -461,54 +563,54 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
 
 // Create setup intent route
 app.post("/create-setup-intent", verifyToken, async (req, res) => {
-    try {
-        const email = req.user?.email;
-        logger.info(`Creating setup intent for user: ${email}`);
+  try {
+    const email = req.user?.email;
 
-        if (!email) {
-            return res.status(401).send({ error: "Unauthorized access" });
-        }
-
-        const customers = await stripe.customers.list({ email });
-        let customer = customers.data[0];
-        
-        if (!customer) {
-            customer = await stripe.customers.create({ email });
-            logger.info(`Created new customer: ${customer.id}`);
-        }
-
-        const paymentMethods = await stripe.paymentMethods.list({
-            customer: customer.id,
-            type: "card",
-        });
-
-        if (paymentMethods.data.length >= 2) {
-            return res.status(400).send({ 
-                error: "Maximum of 2 payment methods allowed. Please remove one before adding another." 
-            });
-        }
-
-        const frontendUrl = process.env.FRONTEND_URL || (
-    process.env.REACT_APP_ENVIRONMENT === 'production' 
-        ? 'https://app.contactvalidate.com'
-        : 'https://testing.contactvalidate.com'
-);
-
-const session = await stripe.checkout.sessions.create({
-    payment_method_types: ['card'],
-    mode: 'setup',
-    customer: customer.id,
-    success_url: `${frontendUrl}/dashboard?setup_success=true`,
-    cancel_url: `${frontendUrl}/dashboard?setup_canceled=true`,
-});
-
-        res.status(200).send({ url: session.url });
-        logger.info(`Setup session created for ${email}: ${session.id}`);
-
-    } catch (error) {
-        logger.error("Error creating setup intent:", error);
-        res.status(500).send({ error: "Failed to create setup intent" });
+    if (!email) {
+      logger.error("Unauthorized access: Missing email.");
+      return res.status(401).send({ error: "Unauthorized access" });
     }
+
+    logger.info(`Creating setup intent for user: ${email}`);
+
+    // Retrieve or create Stripe customer
+    const customers = await stripe.customers.list({ email });
+    let customer = customers.data[0];
+    if (!customer) {
+      customer = await stripe.customers.create({ email });
+      logger.info(`Created new customer: ${customer.id}`);
+    }
+
+    // Ensure the customer has fewer than 2 payment methods
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customer.id,
+      type: "card",
+    });
+
+    if (paymentMethods.data.length >= 2) {
+      logger.warn("User has maximum allowed payment methods:", { email });
+      return res.status(400).send({
+        error: "Maximum of 2 payment methods allowed. Please remove one before adding another.",
+      });
+    }
+
+    // Create Stripe Checkout session in "setup" mode
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "setup",
+      customer: customer.id,
+      billing_address_collection: 'required',
+      success_url: `${frontendUrl}/dashboard?setup_success=true`,
+      cancel_url: `${frontendUrl}/dashboard?setup_canceled=true`,
+    });
+
+    logger.info(`Setup session created: ${session.id}`, { email });
+    res.status(200).send({ url: session.url });
+  } catch (error) {
+    logger.error("Error in /create-setup-intent:", { message: error.message, stack: error.stack });
+    res.status(500).send({ error: "Failed to create setup intent." });
+  }
 });
 
 // Set default payment method
@@ -631,41 +733,73 @@ app.post("/delete-payment-method", verifyToken, async (req, res) => {
 // Route: Get Purchase History
 app.post("/get-purchase-history", async (req, res) => {
     const { email } = req.body;
-    logger.info(`Fetching purchase history for user: ${email}`);
 
     if (!email) {
         return res.status(400).send({ error: { message: "Email is required" } });
     }
 
     try {
+        // Fetch Stripe customer
         const customers = await stripe.customers.list({ email });
         const customer = customers.data.find((c) => c.email === email);
 
         if (!customer) {
-            logger.info(`No Stripe customer found for email: ${email}`);
             return res.status(200).send({ history: [], message: "No purchase history found" });
         }
 
+        // Fetch payment intents
         const paymentIntents = await stripe.paymentIntents.list({
             customer: customer.id,
-            limit: 10,
+            limit: 50,
         });
 
-        const history = paymentIntents.data.map((payment) => ({
-            amount: payment.amount / 100,
-            currency: payment.currency.toUpperCase(),
-            status: payment.status,
-            date: new Date(payment.created * 1000).toLocaleString(),
-            description: payment.description || "Credit Purchase",
-        }));
+        // Fetch checkout sessions (include $0 transactions)
+        const checkoutSessions = await stripe.checkout.sessions.list({
+            customer: customer.id,
+            limit: 50,
+        });
+
+        // Map product IDs to readable descriptions
+        const productMap = {
+            prod_basic3: { name: "3 Credits Pack", credits: 3 },
+            prod_basic10: { name: "10 Credits Pack", credits: 10 },
+            prod_basic50: { name: "50 Credits Pack", credits: 50 },
+            prod_popular150: { name: "150 Credits Pack", credits: 150 },
+            prod_premium500: { name: "500 Credits Pack", credits: 500 },
+            prod_premium1000: { name: "1000 Credits Pack", credits: 1000 },
+            prod_premium1750: { name: "1750 Credits Pack", credits: 1750 },
+            "price_1QOubIAUGHTClvwyCb4r0ffE": { name: "3 Credits Pack", credits: 3 }, // $2 test product mapping
+        };
+
+        // Combine payment intents and checkout sessions
+        const history = [
+            ...paymentIntents.data.map((payment) => ({
+                amount: payment.amount / 100,
+                currency: payment.currency.toUpperCase(),
+                status: payment.status,
+                date: new Date(payment.created * 1000).toLocaleString(),
+                description: productMap[payment.metadata?.productId]?.name || "Unknown Product",
+                credits: productMap[payment.metadata?.productId]?.credits || "N/A",
+            })),
+            ...checkoutSessions.data
+                .filter((session) => session.amount_total === 0) // Only include $0 transactions
+                .map((session) => ({
+                    amount: 0,
+                    currency: "USD",
+                    status: "succeeded",
+                    date: new Date(session.created * 1000).toLocaleString(),
+                    description: productMap[session.metadata?.productId]?.name || "No-cost Order",
+                    credits: productMap[session.metadata?.productId]?.credits || "N/A",
+                })),
+        ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
         res.status(200).send({ history });
-        logger.info(`Successfully retrieved purchase history for ${email}`);
     } catch (error) {
         logger.error(`Error fetching purchase history: ${error.message}`);
         res.status(500).send({ error: "Failed to fetch purchase history" });
     }
 });
+
 
 // Route: Check or Fetch Credits
 app.post("/check-credits", async (req, res) => {
