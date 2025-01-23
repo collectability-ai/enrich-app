@@ -1,4 +1,5 @@
 import React from "react";
+import logger from './logger';
 import { useLocation } from "react-router-dom";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -11,17 +12,26 @@ const ResultsPage = () => {
 const renderAddress = (address) => {
   if (!address) return "";
 
+  logger.log("Debugging searchedAddress:", address);
+
+  // Check for different naming conventions
+  const line1 = address.line1 || address.street || ""; // Handle "line1" or "street"
+  const unit = address.unit || ""; // Handle "unit" (optional)
+  const city = address.city || "";
+  const region = address.region || address.state || ""; // Handle "region" or "state"
+  const postalCode = address.postalCode || address.zip || ""; // Handle "postalCode" or "zip"
+  const countryCode = address.countryCode || ""; // Handle "countryCode" (optional)
+
   // Check if all fields are empty
-  const { street = "", city = "", state = "", zip = "" } = address;
-  if (!street && !city && !state && !zip) {
+  if (!line1 && !unit && !city && !region && !postalCode && !countryCode) {
     return ""; // Return an empty string if all fields are blank
   }
 
   // Return formatted address
-  return `${street}${city ? `, ${city}` : ""}${state ? `, ${state}` : ""}${zip ? ` ${zip}` : ""}`;
+  return `${line1}${unit ? `, ${unit}` : ""}${city ? `, ${city}` : ""}${region ? `, ${region}` : ""}${postalCode ? ` ${postalCode}` : ""}${countryCode ? `, ${countryCode}` : ""}`;
 };
 
-// Render a single value, leaving it blank if undefined or null
+  // Render a single value, leaving it blank if undefined or null
 const renderValue = (value) => {
   return value || "";
 };
