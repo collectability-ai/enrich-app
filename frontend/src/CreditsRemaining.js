@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from './logger';
 import axios from "axios";
 
 const CreditsRemaining = ({ userEmail }) => {
@@ -14,7 +15,7 @@ const CreditsRemaining = ({ userEmail }) => {
         setRemainingCredits(response.data.credits || 0);
       } catch (err) {
         setError("Failed to fetch remaining credits.");
-        console.error(err);
+        logger.error(err);
       }
     };
 

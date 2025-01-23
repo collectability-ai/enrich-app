@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.1.8"
-$description = "Fixed loginloop and double credits on new purchase."
+$version = "v2.1.9"
+$description = "updated logging to remove console logs in prod. localhost functional."
 
 # Add all changes
 git add .

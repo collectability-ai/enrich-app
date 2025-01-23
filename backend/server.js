@@ -4,6 +4,7 @@ const {
   express,
   stripe,
   logger,
+  envLogger,
   FRONTEND_URL,
   verifyToken,
   dynamoDBDocClient,
@@ -743,30 +744,32 @@ app.post("/get-purchase-history", async (req, res) => {
 
 // Route: Check or Fetch Credits
 app.post("/check-credits", async (req, res) => {
-  console.log("Check Credits endpoint hit");
+  // Log that the endpoint was hit
+  logger.info("Check Credits endpoint hit");
   
-  // Log the request headers and body
-  console.log("Request headers:", req.headers);
-  console.log("Request body:", req.body);
+  // Log the request headers and body for debugging
+  logger.info("Request headers:", req.headers);
+  logger.info("Request body:", req.body);
 
   const { email } = req.body;
 
   if (!email) {
-    console.warn("Check Credits: Email is missing in request body");
+    logger.warn("Check Credits: Email is missing in request body");
     return res.status(400).json({ error: "Email is required" });
   }
 
   try {
-    console.log(`Fetching credits for email: ${email}`);
+    logger.info(`Fetching credits for email: ${email}`);
     const credits = await getUserCredits(email);
-    console.log(`Credits fetched successfully for ${email}:`, credits);
+    logger.info(`Credits fetched successfully for ${email}: ${credits}`);
 
     res.status(200).json({ email, credits });
   } catch (err) {
-    console.error("Error checking credits:", err);
+    logger.error("Error checking credits:", err);
     res.status(500).json({ error: "Failed to fetch credits" });
   }
 });
+
 
 // Route: Add Credits
 app.post("/add-credits", async (req, res) => {
@@ -1033,7 +1036,7 @@ app.post("/signup", async (req, res) => {
       .status(200)
       .json({ success: true, message: "User signup successful." });
   } catch (err) {
-    console.error("Error signing up user:", err);
+    logger.error("Error signing up user:", err);
 
     // Handle Cognito-specific errors (e.g., UserExistsException)
     if (err.name === "UsernameExistsException") {
@@ -1108,7 +1111,7 @@ app.post("/login", async (req, res) => {
       message: "Login successful",
     });
   } catch (err) {
-    console.error("Login error:", err);
+    logger.error("Login error:", err);
 
     // Handle specific Cognito exceptions
     if (err.name === "NotAuthorizedException") {
@@ -1137,7 +1140,7 @@ app.get("/auth/validate", (req, res) => {
   const accessToken = req.cookies.accessToken; // Get accessToken from cookies
 
   if (!accessToken) {
-    console.error("No access token found in cookies");
+    logger.error("No access token found in cookies");
     return res.status(401).json({ success: false, message: "No access token found" });
   }
 
@@ -1145,7 +1148,7 @@ app.get("/auth/validate", (req, res) => {
   const getKey = (header, callback) => {
     client.getSigningKey(header.kid, (err, key) => {
       if (err) {
-        console.error("Error fetching signing key:", err.message);
+        logger.error("Error fetching signing key:", err.message);
         return callback(err);
       }
       callback(null, key.getPublicKey());
@@ -1155,12 +1158,12 @@ app.get("/auth/validate", (req, res) => {
   // Verify the access token
   jwt.verify(accessToken, getKey, { algorithms: ["RS256"] }, (err, decoded) => {
     if (err) {
-      console.error("Token validation failed:", err.message);
+      logger.error("Token validation failed:", err.message);
       return res.status(401).json({ success: false, message: "Invalid or expired token" });
     }
 
     // Log decoded token for debugging
-    console.info("Token successfully validated:", decoded);
+    logger.info("Token successfully validated:", decoded);
 
     // Send user data if token is valid
     res.status(200).json({ success: true, user: decoded });
@@ -1171,9 +1174,13 @@ app.get("/auth/validate", (req, res) => {
 app.all("*", (req, res) => {
   const { path, method, body } = req;
 
-  console.log(`Received request: ${method} ${path}`);
-  console.log("Request body:", body);
+  // Log the request method and path
+  logger.info(`Received request: ${method} ${path}`);
+  
+  // Log the request body for debugging
+  logger.info("Request body:", body);
 
+  // Respond with a confirmation message
   res.status(200).json({
     message: "Lambda is connected and receiving requests",
     method,
@@ -1225,7 +1232,7 @@ if (isLambda) {
 }
 
 // Log before starting the server
-console.log("Starting the server...");
+logger.info("Starting the server...");
 
 // Server startup and environment configuration
 if (!isLambda) {

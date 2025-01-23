@@ -10,6 +10,7 @@ import PurchaseCredits from "./PurchaseCredits";
 import Signup from "./Signup";
 import Login from "./Login";
 import VerifyEmail from "./VerifyEmail";
+import logger from './logger';
 import "./aws-config";
 
 const App = () => {
@@ -51,9 +52,9 @@ const App = () => {
           const session = await fetchAuthSession();
           const idToken = session?.tokens?.idToken?.toString();
           setSessionToken(idToken);
-          console.log("Fetched sessionToken:", idToken);
-        } catch (error) {
-          console.error("Error getting session:", error);
+          logger.log("Fetched sessionToken:", idToken);
+} catch (error) {
+  logger.error("Error getting session:", error);
           setSessionToken(null);
         }
       }
@@ -66,11 +67,11 @@ const App = () => {
     const checkUser = async () => {
       try {
         const userData = await getCurrentUser();
-        console.log("Current user data:", userData);
+        logger.log("Current user data:", userData);
         setIsLoggedIn(true);
         setEmail(userData.signInDetails?.loginId || userData.username);
       } catch (error) {
-        console.log("Not signed in");
+        logger.log("Not signed in");
         setIsLoggedIn(false);
         setEmail("");
         setSessionToken(null);
@@ -83,7 +84,7 @@ const App = () => {
 
     const unsubscribe = Hub.listen("auth", ({ payload }) => {
       const { event } = payload;
-      console.log("Auth event:", event);
+      logger.log("Auth event:", event);
 
       if (event === "signedIn") {
         checkUser();
@@ -103,9 +104,9 @@ const App = () => {
       setIsLoggedIn(false);
       setEmail("");
       setSessionToken(null);
-      console.log("Signed out successfully");
+      logger.log("Signed out successfully");
     } catch (error) {
-      console.error("Error signing out:", error);
+      logger.error("Error signing out:", error);
     } finally {
       setIsLoading(false); // Ensure loading state is cleared
     }

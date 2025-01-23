@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from './logger';
 import SuccessModal from "./SuccessModal";
 import config from "./config"; // Ensure price mappings are imported correctly
 
@@ -28,7 +29,7 @@ const creditPacks = Object.values(config.PRODUCT_TO_PRICE_MAP).map((pack) => ({
 const fetchCredits = async () => {
   setLoadingCredits(true); // Start the spinner
   try {
-    console.log("Fetching remaining credits...");
+    logger.log("Fetching remaining credits...");
     const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/check-credits`, {
       method: "POST",
       headers: {
@@ -41,10 +42,10 @@ const fetchCredits = async () => {
     if (response.ok) {
       const data = await response.json();
       setRemainingCredits(data.credits);
-      console.log("Remaining credits fetched successfully:", data.credits);
+      logger.log("Remaining credits fetched successfully:", data.credits);
     }
   } catch (error) {
-    console.error("Error fetching credits:", error);
+    logger.error("Error fetching credits:", error);
   } finally {
     setLoadingCredits(false); // Stop the spinner
   }
@@ -60,10 +61,10 @@ const handleBuyPack = async (pack) => {
   setSelectedPack(pack);
 
   try {
-    console.log("Starting purchase flow for pack:", pack);
+    logger.log("Starting purchase flow for pack:", pack);
 
     // Step 2.1: Fetch available payment methods
-    console.log("Fetching payment methods...");
+    logger.log("Fetching payment methods...");
     const paymentMethodsResponse = await fetch(`${process.env.REACT_APP_API_BASE_URL}/get-payment-methods`, {
       method: "POST",
       headers: {
@@ -78,7 +79,7 @@ const handleBuyPack = async (pack) => {
     }
 
     const data = await paymentMethodsResponse.json();
-    console.log("Fetched payment methods:", data.paymentMethods);
+    logger.log("Fetched payment methods:", data.paymentMethods);
 
     // Step 2.2: Handle case where payment methods are available
     if (data.paymentMethods && data.paymentMethods.length > 0) {
@@ -87,11 +88,11 @@ const handleBuyPack = async (pack) => {
       setShowConfirmModal(true); // Immediately show the modal after setting payment method
     } else {
       // Step 2.3: Handle case where no payment methods are available
-      console.log("No payment methods found, creating Stripe Checkout session...");
+      logger.log("No payment methods found, creating Stripe Checkout session...");
       await handleStripeCheckout(pack.productId); // Use priceId instead of productId
     }
   } catch (error) {
-    console.error("Error processing purchase:", error);
+    logger.error("Error processing purchase:", error);
     alert("An error occurred. Please try again.");
   }
 };
@@ -100,12 +101,12 @@ const handleBuyPack = async (pack) => {
 const handleConfirmPurchase = async () => {
   if (!selectedPack) {
     alert("No credit pack selected. Please try again.");
-    console.error("Error: No selectedPack object provided.");
+    logger.error("Error: No selectedPack object provided.");
     return;
   }
 
   try {
-    console.log("Confirming purchase for:", {
+    logger.log("Confirming purchase for:", {
       email: userEmail,
       paymentMethodId: paymentMethod?.id,
       productId: selectedPack?.productId,
@@ -130,7 +131,7 @@ const handleConfirmPurchase = async () => {
     }
 
     const purchaseData = await response.json();
-    console.log("Purchase successful:", purchaseData);
+    logger.log("Purchase successful:", purchaseData);
 
     // Step: Fetch updated credits
     await fetchCredits();
@@ -142,7 +143,7 @@ setShowSuccessModal({
   message: `Successfully purchased ${selectedPack?.credits} credits!`,
 });
 } catch (error) {
-  console.error("Error processing purchase:", {
+  logger.error("Error processing purchase:", {
     message: error.message,
     paymentMethod,
     selectedPack,
@@ -159,7 +160,7 @@ setShowSuccessModal({
 // Step 4: Redirect to Stripe Checkout if no payment methods exist
 const handleStripeCheckout = async (productId) => {
   try {
-    console.log("Initiating Stripe Checkout for productId:", productId);
+    logger.log("Initiating Stripe Checkout for productId:", productId);
 
     const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/create-checkout-session`, {
       method: "POST",
@@ -177,11 +178,11 @@ const handleStripeCheckout = async (productId) => {
     }
 
     const checkoutData = await response.json();
-    console.log("Redirecting to Stripe Checkout:", checkoutData.url);
+    logger.log("Redirecting to Stripe Checkout:", checkoutData.url);
 
     window.location.href = checkoutData.url;
   } catch (error) {
-    console.error("Error initiating Stripe Checkout:", error);
+    logger.error("Error initiating Stripe Checkout:", error);
     alert("An error occurred. Please try again.");
   }
 };

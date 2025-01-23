@@ -3,6 +3,7 @@ import axios from "axios";
 import SearchHistory from "./SearchHistory";
 import { jwtDecode } from "jwt-decode";
 import SuccessModal from './SuccessModal';
+import logger from './logger';
 import config from './config';
 
 const Dashboard = ({ token, email }) => {
@@ -215,7 +216,7 @@ const handleQuickBuy = async () => {
       setRemainingCredits(updatedCredits);
 
       // Log the updated credits for debugging
-      console.log("Updated credits:", updatedCredits);
+      logger.log("Updated credits:", updatedCredits);
     }
 
     setShowPopup(false);

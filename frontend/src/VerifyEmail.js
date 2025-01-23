@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from './logger';
 import { confirmSignUp, resendSignUpCode } from 'aws-amplify/auth';
 import { useNavigate } from "react-router-dom";
 
@@ -51,7 +52,7 @@ const VerifyEmail = () => {
       alert("Email verified successfully! Please log in.");
       navigate('/login');
     } catch (error) {
-      console.error("Verification error:", error);
+      logger.error("Verification error:", error);
       setError(error.message || "Failed to verify email. Please try again.");
     } finally {
       setIsLoading(false);
@@ -69,7 +70,7 @@ const VerifyEmail = () => {
       
       alert("Verification code has been resent to your email.");
     } catch (error) {
-      console.error("Error resending code:", error);
+      logger.error("Error resending code:", error);
       setError(error.message || "Failed to resend verification code.");
       setResendDisabled(false);
       setCountdown(0);
