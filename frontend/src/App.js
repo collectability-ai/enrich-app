@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth';
-import { Hub } from 'aws-amplify/utils';
+import { getCurrentUser, signOut, fetchAuthSession } from "aws-amplify/auth";
+import { Hub } from "aws-amplify/utils";
 import Sidebar from "./Sidebar";
 import Dashboard from "./Dashboard";
 import InputForm from "./InputForm";
@@ -10,7 +10,7 @@ import PurchaseCredits from "./PurchaseCredits";
 import Signup from "./Signup";
 import Login from "./Login";
 import VerifyEmail from "./VerifyEmail";
-import './aws-config';
+import "./aws-config";
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -18,6 +18,7 @@ const App = () => {
   const [sessionToken, setSessionToken] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Tracks the loading state
   const location = useLocation();
 
   // Handle responsive layout
@@ -31,8 +32,8 @@ const App = () => {
     };
 
     handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // Close mobile sidebar on route change
@@ -50,6 +51,7 @@ const App = () => {
           const session = await fetchAuthSession();
           const idToken = session?.tokens?.idToken?.toString();
           setSessionToken(idToken);
+          console.log("Fetched sessionToken:", idToken);
         } catch (error) {
           console.error("Error getting session:", error);
           setSessionToken(null);
@@ -59,43 +61,57 @@ const App = () => {
     getToken();
   }, [isLoggedIn]);
 
-  // Auth state management
+  // Auth state management with loading fix
   useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const userData = await getCurrentUser();
+        console.log("Current user data:", userData);
+        setIsLoggedIn(true);
+        setEmail(userData.signInDetails?.loginId || userData.username);
+      } catch (error) {
+        console.log("Not signed in");
+        setIsLoggedIn(false);
+        setEmail("");
+        setSessionToken(null);
+      } finally {
+        setIsLoading(false); // Stop the loading spinner
+      }
+    };
+
     checkUser();
-    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+
+    const unsubscribe = Hub.listen("auth", ({ payload }) => {
       const { event } = payload;
-      if (event === 'signedIn') {
+      console.log("Auth event:", event);
+
+      if (event === "signedIn") {
         checkUser();
-      } else if (event === 'signedOut') {
-        handleSignOut();
+      } else if (event === "signedOut") {
+        handleSignOut(true); // Avoid freezing by resetting state
       }
     });
+
     return () => unsubscribe();
   }, []);
 
-  const checkUser = async () => {
+  const handleSignOut = async (fromHub = false) => {
     try {
-      const userData = await getCurrentUser();
-      setIsLoggedIn(true);
-      setEmail(userData.signInDetails?.loginId || userData.username);
-    } catch (error) {
-      handleSignOut();
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error("Error signing out:", error);
-    } finally {
+      if (!fromHub) {
+        await signOut();
+      }
       setIsLoggedIn(false);
       setEmail("");
       setSessionToken(null);
+      console.log("Signed out successfully");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    } finally {
+      setIsLoading(false); // Ensure loading state is cleared
     }
   };
 
-  if (isLoggedIn && (!email || !sessionToken)) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -117,50 +133,50 @@ const App = () => {
         {isLoggedIn && (
           <>
             {/* Mobile Menu Button */}
-<button
-  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-  className={`fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors lg:hidden ${
-    isSidebarOpen ? 'left-[280px]' : 'left-4'
-  }`}
-  aria-label="Toggle menu"
->
-  <svg
-    className="w-6 h-6 text-gray-600"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    {isSidebarOpen ? (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M6 18L18 6M6 6l12 12"
-      />
-    ) : (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M4 6h16M4 12h16M4 18h16"
-      />
-    )}
-  </svg>
-</button>
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className={`fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors lg:hidden ${
+                isSidebarOpen ? "left-[280px]" : "left-4"
+              }`}
+              aria-label="Toggle menu"
+            >
+              <svg
+                className="w-6 h-6 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                {isSidebarOpen ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                )}
+              </svg>
+            </button>
 
-{/* Sidebar */}
-<aside
-  className={`fixed lg:static lg:translate-x-0 z-40 transition-transform duration-300 ease-in-out ${
-    isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-  }`}
->
-  <Sidebar 
-    email={email} 
-    onSignOut={handleSignOut} 
-    isCollapsed={!isSidebarOpen}
-    setIsCollapsed={() => setIsSidebarOpen(!isSidebarOpen)} 
-  />
-</aside>
+            {/* Sidebar */}
+            <aside
+              className={`fixed lg:static lg:translate-x-0 z-40 transition-transform duration-300 ease-in-out ${
+                isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <Sidebar
+                email={email}
+                onSignOut={() => handleSignOut(false)} // Explicitly pass false
+                isCollapsed={!isSidebarOpen}
+                setIsCollapsed={() => setIsSidebarOpen(!isSidebarOpen)}
+              />
+            </aside>
 
             {/* Mobile Overlay */}
             {isMobileView && isSidebarOpen && (
@@ -173,11 +189,11 @@ const App = () => {
         )}
 
         {/* Main Content Area */}
-<main 
-  className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
-    isMobileView ? 'px-4' : 'px-8'
-  }`}
->
+        <main
+          className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
+            isMobileView ? "px-4" : "px-8"
+          }`}
+        >
           <div className="py-6">
             <Routes>
               <Route

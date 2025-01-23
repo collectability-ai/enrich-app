@@ -84,129 +84,81 @@ app.post(
         id: event.id,
       });
 
-      switch (event.type) {
-       case "checkout.session.completed": {
-  const session = event.data.object;
+      const { type, data } = event;
 
-  logger.info("Processing checkout.session.completed:", {
-    sessionId: session.id,
-    metadata: session.metadata,
-  });
+      switch (type) {
+        case 'checkout.session.completed': {
+          const session = data.object;
 
-  try {
-    const customerEmail = session.metadata?.userEmail;
-    const creditsToAdd = parseInt(session.metadata?.credits, 10);
-    const paymentIntentId = session.payment_intent;
-
-    if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-      throw new Error("Invalid metadata in session");
-    }
-
-    // Step 1: Retrieve Payment Intent and Payment Method
-    let paymentMethodId;
-    if (paymentIntentId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-        paymentMethodId = paymentIntent.payment_method;
-
-        if (paymentMethodId) {
-          logger.info("Retrieved payment method:", { paymentMethodId });
-
-          // Check if the payment method is already attached to the customer
-          const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
-
-          if (paymentMethod.customer !== session.customer) {
-            // Attach payment method to customer if not already attached
-            logger.info("Attaching payment method to customer:", {
-              paymentMethodId,
-              customerId: session.customer,
-            });
-
-            await stripe.paymentMethods.attach(paymentMethodId, {
-              customer: session.customer,
-            });
-
-            // Set payment method as default
-            await stripe.customers.update(session.customer, {
-              invoice_settings: { default_payment_method: paymentMethodId },
-            });
-
-            logger.info("Default payment method updated successfully.");
-          } else {
-            logger.info("Payment method is already attached to the customer.");
-          }
-        } else {
-          logger.warn("No payment method found to attach for session:", {
+          logger.info('Processing checkout.session.completed:', {
             sessionId: session.id,
+            metadata: session.metadata,
           });
+
+          try {
+            const customerEmail = session.metadata?.userEmail;
+            const creditsToAdd = parseInt(session.metadata?.credits, 10);
+            const sessionId = session.id;
+
+            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+              throw new Error('Invalid metadata in session');
+            }
+
+            // Check if credits are already updated for this session
+            const sessionProcessed = await isSessionProcessed(sessionId);
+            if (sessionProcessed) {
+              logger.info('Credits already updated for session:', { sessionId });
+              break;
+            }
+
+            // Update User Credits
+            let currentCredits = await getUserCredits(customerEmail);
+            const newTotalCredits = currentCredits + creditsToAdd;
+
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info('Credits updated successfully:', {
+              customerEmail,
+              previousCredits: currentCredits,
+              addedCredits: creditsToAdd,
+              newTotalCredits,
+            });
+
+            // Mark the session as processed
+            await markSessionProcessed(sessionId);
+
+            // Log Payment History
+            if (typeof logPaymentHistory === 'function') {
+              await logPaymentHistory(customerEmail, {
+                productId: session.metadata?.productId || 'Unknown',
+                credits: creditsToAdd || 'N/A',
+                amount: session.amount_total / 100,
+                status: 'succeeded',
+                sessionId: session.id,
+              });
+            } else {
+              logger.error('logPaymentHistory function is not defined.');
+            }
+          } catch (err) {
+            logger.error('Error processing checkout.session.completed:', {
+              error: err.message,
+              stack: err.stack,
+            });
+            throw err;
+          }
+          break;
         }
-      } catch (error) {
-        logger.error("Error attaching or setting default payment method:", {
-          error: error.message,
-        });
-      }
-    } else {
-      logger.warn("No payment method available to attach or set as default.");
-    }
 
-    // Step 2: Update User Credits
-    let currentCredits = 0;
-    try {
-      currentCredits = await getUserCredits(customerEmail);
-      logger.info("Current credits:", { customerEmail, currentCredits });
-    } catch (error) {
-      logger.warn("No credit record found, initializing user:", { customerEmail });
-      await initializeUserCredits(customerEmail);
-    }
+        case 'payment_intent.succeeded': {
+          const paymentIntent = data.object;
 
-    const newTotalCredits = currentCredits + creditsToAdd;
-    await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-    logger.info("Credits updated successfully:", {
-      customerEmail,
-      previousCredits: currentCredits,
-      addedCredits: creditsToAdd,
-      newTotalCredits,
-    });
-
-    // Step 3: Log Payment History
-    if (typeof logPaymentHistory === "function") {
-      await logPaymentHistory(customerEmail, {
-        productId: session.metadata?.productId || "Unknown",
-        credits: creditsToAdd || "N/A",
-        amount: session.amount_total / 100, // Amount in dollars
-        status: "succeeded",
-        sessionId: session.id,
-      });
-    } else {
-      logger.error("logPaymentHistory function is not defined.");
-    }
-  } catch (err) {
-    logger.error("Error processing checkout.session.completed:", {
-      error: err.message,
-      stack: err.stack,
-      sessionId: session.id,
-    });
-    throw err;
-  }
-  break;
-}
-
-
-        case "payment_intent.succeeded": {
-          const paymentIntent = event.data.object;
-
-          logger.info("Processing payment_intent.succeeded:", {
+          logger.info('Processing payment_intent.succeeded:', {
             paymentIntentId: paymentIntent.id,
             metadata: paymentIntent.metadata,
           });
 
-          // Skip processing if handled by `checkout.session.completed`
           if (paymentIntent.metadata?.fromCheckoutSession) {
-            logger.info(
-              "Skipping payment_intent.succeeded as credits handled by checkout.session.completed",
-              { paymentIntentId: paymentIntent.id }
-            );
+            logger.info('Skipping payment_intent.succeeded, handled by checkout.session.completed');
             break;
           }
 
@@ -215,34 +167,25 @@ app.post(
             const creditsToAdd = parseInt(paymentIntent.metadata?.credits, 10);
 
             if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              throw new Error("Invalid metadata in payment intent");
+              throw new Error('Invalid metadata in payment intent');
             }
 
-            let currentCredits = 0;
-            try {
-              currentCredits = await getUserCredits(customerEmail);
-              logger.info("Current credits:", { customerEmail, currentCredits });
-            } catch (error) {
-              logger.warn("No credit record found, initializing user:", {
-                customerEmail,
-              });
-              await initializeUserCredits(customerEmail);
-            }
-
+            // Update User Credits
+            let currentCredits = await getUserCredits(customerEmail);
             const newTotalCredits = currentCredits + creditsToAdd;
+
             await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
 
-            logger.info("Credits updated successfully:", {
+            logger.info('Credits updated successfully:', {
               customerEmail,
               previousCredits: currentCredits,
               addedCredits: creditsToAdd,
               newTotalCredits,
             });
           } catch (err) {
-            logger.error("Error processing payment_intent.succeeded:", {
+            logger.error('Error processing payment_intent.succeeded:', {
               error: err.message,
               stack: err.stack,
-              paymentIntentId: paymentIntent.id,
             });
             throw err;
           }
@@ -250,23 +193,20 @@ app.post(
         }
 
         default:
-          logger.warn(`Unhandled event type: ${event.type}`);
+          logger.warn(`Unhandled event type: ${type}`);
       }
 
       response.status(200).json({ received: true });
     } catch (err) {
-      logger.error("Webhook error:", {
+      logger.error('Webhook error:', {
         error: err.message,
         stack: err.stack,
-        headers: request.headers,
-        rawBody: request.body.toString('utf8'),
       });
 
       response.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
 );
-
 
 
 // Routes
