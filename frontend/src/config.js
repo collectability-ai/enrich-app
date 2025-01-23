@@ -96,9 +96,4 @@ const config = {
   STAGE: process.env.REACT_APP_STAGE || 'dev',
 };
 
-// Debug Logging
-if (process.env.NODE_ENV === 'development') {
-  console.log("Configuration:", config);
-}
-
 export default config;

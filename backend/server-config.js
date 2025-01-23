@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const winston = require('winston');
+const envLogger = require('./utils/logger');
 const { CognitoIdentityProviderClient, SignUpCommand, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
@@ -28,9 +29,9 @@ const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 // Load environment variables
 if (!isLambda) {
   dotenv.config({ path: `.env.${process.env.NODE_ENV || 'development'}` });
-  console.log(`Loaded environment variables from .env.${process.env.NODE_ENV || 'development'}`);
+  envLogger.log(`Loaded environment variables from .env.${process.env.NODE_ENV || 'development'}`);
 } else {
-  console.log('Running in Lambda environment - using provided environment variables');
+  envLogger.log('Running in Lambda environment - using provided environment variables');
   process.env.NODE_ENV = 'production';
 }
 
@@ -83,7 +84,7 @@ function validateEnvironmentVariables() {
 
   if (!isProduction) {
     if (!process.env.API_ACCESS_KEY_ID || !process.env.API_SECRET_ACCESS_KEY) {
-      console.warn(
+      envLogger.warn(
         "Warning: External API credentials (API_ACCESS_KEY_ID and API_SECRET_ACCESS_KEY) are missing in development."
       );
     }
@@ -92,11 +93,11 @@ function validateEnvironmentVariables() {
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
-    console.error("Missing required environment variables:", missingVars);
+    envLogger.error("Missing required environment variables:", missingVars);
     throw new Error("Environment configuration error: Missing variables.");
   }
 
-  console.log("Environment variables validated successfully.");
+  envLogger.log("Environment variables validated successfully.");
 }
 
 validateEnvironmentVariables();
@@ -161,7 +162,7 @@ const stripePriceIDs = {
 // Debug Logging
 // =========================================
 
-console.log('Configuration Summary:', {
+envLogger.log('Configuration Summary:', {
   Environment: {
     NODE_ENV: process.env.NODE_ENV,
     isLambda,
@@ -206,8 +207,8 @@ const CREDIT_COSTS = {
   validate_and_enrich: 3,
 };
 
-console.log(`Using User Credits Table: ${USER_CREDITS_TABLE}`);
-console.log(`Using Search History Table: ${SEARCH_HISTORY_TABLE}`);
+envLogger.log(`Using User Credits Table: ${USER_CREDITS_TABLE}`);
+envLogger.log(`Using Search History Table: ${SEARCH_HISTORY_TABLE}`);
 
 // Initialize DynamoDB and Cognito Clients
 const dynamoDBClient = new DynamoDBClient(awsConfig);
@@ -215,10 +216,10 @@ const dynamoDBDocClient = DynamoDBDocumentClient.from(dynamoDBClient);
 const cognitoClient = new CognitoIdentityProviderClient(awsConfig);
 
 // Debugging Logs for AWS Clients
-console.log("AWS Clients initialized:");
-console.log(`- DynamoDB: ${!!dynamoDBClient}`);
-console.log(`- DynamoDB Document Client: ${!!dynamoDBDocClient}`);
-console.log(`- Cognito Client: ${!!cognitoClient}`);
+envLogger.log("AWS Clients initialized:");
+envLogger.log(`- DynamoDB: ${!!dynamoDBClient}`);
+envLogger.log(`- DynamoDB Document Client: ${!!dynamoDBDocClient}`);
+envLogger.log(`- Cognito Client: ${!!cognitoClient}`);
 
 // Initialize SignatureV4 signer
 const signer = new SignatureV4({
@@ -247,7 +248,7 @@ const logger = winston.createLogger({
 });
 
 // Debug log the frontend URL being used
-console.log("Frontend URL Configuration:", {
+envLogger.log("Frontend URL Configuration:", {
   NODE_ENV: process.env.NODE_ENV,
   FRONTEND_URL: process.env.FRONTEND_URL
 });
@@ -256,7 +257,7 @@ console.log("Frontend URL Configuration:", {
 app.use(cors({
   origin: (origin, callback) => {
     // Log CORS request details
-    logger.info('CORS Request Details:', {
+    envLogger.info('CORS Request Details:', {
       requestOrigin: origin,
       allowedOrigins: allowedOrigins,
       environment: process.env.NODE_ENV
@@ -383,7 +384,7 @@ const verifyToken = (req, res, next) => {
 // Utility Functions
 async function getUserCredits(email) {
   if (!email) {
-    logger.error("No email provided to getUserCredits");
+    envLogger.error("No email provided to getUserCredits");
     return 0;
   }
 
@@ -495,7 +496,7 @@ async function signUpUser(userData) {
   try {
     return await cognitoClient.send(new SignUpCommand(params));
   } catch (err) {
-    console.error("Error signing up user:", err);
+    logger.error("Error signing up user:", err);
     throw err;
   }
 }
@@ -576,6 +577,7 @@ module.exports = {
   express,
   awsConfig,
   logger,
+  envLogger,
 
   // Authentication & Payment
   verifyToken,

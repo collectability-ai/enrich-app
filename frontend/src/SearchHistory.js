@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from './logger';
 import axios from "axios";
 
 const SearchHistory = ({ userEmail, token }) => {
@@ -22,12 +23,12 @@ const SearchHistory = ({ userEmail, token }) => {
     setFilteredHistory([]); // Clear immediately when effect runs
 
     if (!userEmail) {
-      console.log("Waiting for user email...");
+      logger.log("Waiting for user email...");
       return;
     }
 
     try {
-      console.log("Calling URL:", `${process.env.REACT_APP_API_BASE_URL}/get-search-history`);
+      logger.log("Calling URL:", `${process.env.REACT_APP_API_BASE_URL}/get-search-history`);
       const response = await axios.post(
         `${process.env.REACT_APP_API_BASE_URL}/get-search-history`,
         { email: userEmail },
@@ -47,7 +48,7 @@ const SearchHistory = ({ userEmail, token }) => {
       }
     } catch (err) {
       if (isMounted) {
-        console.error("Error fetching search history:", err.message);
+        logger.error("Error fetching search history:", err.message);
         setError(err.response?.data?.error?.message || "Failed to fetch search history.");
       }
     } finally {

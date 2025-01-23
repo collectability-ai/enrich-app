@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import logger from './logger';
 
 const CheckoutForm = ({ userEmail }) => {
   const [priceId, setPriceId] = useState("price_1QOv9IAUGHTClvwyzELdaAiQ");
@@ -29,7 +30,7 @@ const CheckoutForm = ({ userEmail }) => {
       const data = await response.json();
       setPaymentMethods(data.paymentMethods || []);
     } catch (error) {
-      console.error("Error fetching payment methods:", error);
+      logger.error("Error fetching payment methods:", error);
       setErrorMessage("Failed to load payment methods");
     }
   };
@@ -40,15 +41,15 @@ const handlePurchase = async () => {
     setSuccessMessage("");
     
     try {
-      console.log("Starting purchase with payment methods:", paymentMethods);
+      logger.log("Starting purchase with payment methods:", paymentMethods);
       
       // Check for payments and default method
       const defaultMethod = paymentMethods.find(method => method.isDefault);
-      console.log("Default payment method found:", defaultMethod);
+      logger.log("Default payment method found:", defaultMethod);
       
       // Log all payment methods and their default status
       paymentMethods.forEach(method => {
-        console.log(`Payment Method ${method.last4}:`, {
+        logger.log(`Payment Method ${method.last4}:`, {
           id: method.id,
           isDefault: method.isDefault,
           brand: method.brand
@@ -56,9 +57,9 @@ const handlePurchase = async () => {
       });
       
       if (!defaultMethod) {
-        console.log("No default method found - checking total payment methods:", paymentMethods.length);
+        logger.log("No default method found - checking total payment methods:", paymentMethods.length);
         if (paymentMethods.length === 0) {
-          console.log("No payment methods - redirecting to Stripe Checkout");
+          logger.log("No payment methods - redirecting to Stripe Checkout");
           // ... Stripe Checkout code ...
         } else {
           setErrorMessage("Please set a default payment method before making a purchase.");
@@ -72,7 +73,7 @@ const handlePurchase = async () => {
         priceId,
         paymentMethodId: defaultMethod.id
       };
-      console.log("Sending purchase request:", {
+      logger.log("Sending purchase request:", {
         url: `${process.env.REACT_APP_API_BASE_URL}/purchase-pack`,
         payload: purchasePayload,
       });
@@ -87,9 +88,9 @@ const handlePurchase = async () => {
         credentials: 'include'
       });
 
-      console.log("Purchase response status:", purchaseResponse.status);
+      logger.log("Purchase response status:", purchaseResponse.status);
       const responseData = await purchaseResponse.json();
-      console.log("Purchase response data:", responseData);
+      logger.log("Purchase response data:", responseData);
 
       if (!purchaseResponse.ok) {
         throw new Error(responseData.error?.message || 'Purchase failed');
@@ -97,7 +98,7 @@ const handlePurchase = async () => {
 
       setSuccessMessage(`Purchase successful! You now have ${responseData.remainingCredits} credits.`);
     } catch (error) {
-      console.error("Purchase error details:", {
+      logger.error("Purchase error details:", {
         message: error.message,
         stack: error.stack,
         paymentMethods: paymentMethods,

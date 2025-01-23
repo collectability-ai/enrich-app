@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import logger from './logger';
 import { useStripe, useElements } from '@stripe/react-stripe-js';
 
 const PaymentMethods = ({ userEmail }) => {
@@ -29,7 +30,7 @@ const PaymentMethods = ({ userEmail }) => {
       setPaymentMethods(data.paymentMethods || []);
     } catch (err) {
       setError('Unable to load payment methods');
-      console.error('Error:', err);
+      logger.error('Error:', err);
     } finally {
       setLoading(false);
     }
