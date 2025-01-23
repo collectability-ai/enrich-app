@@ -117,43 +117,50 @@ const App = () => {
         {isLoggedIn && (
           <>
             {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors lg:hidden"
-              aria-label="Toggle menu"
-            >
-              <svg
-                className="w-6 h-6 text-gray-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                {isSidebarOpen ? (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                ) : (
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                )}
-              </svg>
-            </button>
+<button
+  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+  className={`fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-colors lg:hidden ${
+    isSidebarOpen ? 'left-[280px]' : 'left-4'
+  }`}
+  aria-label="Toggle menu"
+>
+  <svg
+    className="w-6 h-6 text-gray-600"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    {isSidebarOpen ? (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 18L18 6M6 6l12 12"
+      />
+    ) : (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 6h16M4 12h16M4 18h16"
+      />
+    )}
+  </svg>
+</button>
 
-            {/* Sidebar */}
-            <aside
-              className={`${
-                isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-              } fixed lg:static lg:translate-x-0 z-40 h-full transition-transform duration-300 ease-in-out`}
-            >
-              <Sidebar email={email} onSignOut={handleSignOut} />
-            </aside>
+{/* Sidebar */}
+<aside
+  className={`fixed lg:static lg:translate-x-0 z-40 transition-transform duration-300 ease-in-out ${
+    isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+  }`}
+>
+  <Sidebar 
+    email={email} 
+    onSignOut={handleSignOut} 
+    isCollapsed={!isSidebarOpen}
+    setIsCollapsed={() => setIsSidebarOpen(!isSidebarOpen)} 
+  />
+</aside>
 
             {/* Mobile Overlay */}
             {isMobileView && isSidebarOpen && (
@@ -166,9 +173,11 @@ const App = () => {
         )}
 
         {/* Main Content Area */}
-        <main className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
-          isMobileView ? 'px-4' : 'px-8'
-        }`}>
+<main 
+  className={`flex-1 min-w-0 transition-all duration-300 ease-in-out ${
+    isMobileView ? 'px-4' : 'px-8'
+  }`}
+>
           <div className="py-6">
             <Routes>
               <Route
