@@ -1,5 +1,6 @@
 // src/aws-config.js
 import { Amplify } from 'aws-amplify';
+import logger from './logger';
 import config from './config';
 
 const awsConfig = {
@@ -27,7 +28,7 @@ const awsConfig = {
   }
 };
 
-console.log("AWS Amplify Configuration and Variables:", {
+logger.log("AWS Amplify Configuration and Variables:", {
   awsConfig,
   environmentVariables: config,
 });

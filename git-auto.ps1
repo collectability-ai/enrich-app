@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.1.9"
-$description = "updated logging to remove console logs in prod. localhost functional."
+$version = "v2.2.0"
+$description = "updated logging to remove console logs in prod that was missed in aws-config. localhost functional."
 
 # Add all changes
 git add .
