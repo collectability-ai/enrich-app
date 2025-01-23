@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -9,13 +9,34 @@ import {
   User
 } from "lucide-react";
 
-const Sidebar = ({ email, onSignOut }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const Sidebar = ({ email, onSignOut, isCollapsed, setIsCollapsed }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle route changes on mobile
+  useEffect(() => {
+    if (isMobile) {
+      setIsCollapsed(true);
+    }
+  }, [location, isMobile]);
+  
   const handleNavigation = (path) => {
     navigate(path);
+    if (isMobile) {
+      setIsCollapsed(true);
+    }
   };
 
   const navButton = (path, icon, text) => {
@@ -40,43 +61,47 @@ const Sidebar = ({ email, onSignOut }) => {
           {icon}
         </div>
         {!isCollapsed && (
-          <span className="ml-3">{text}</span>
+          <span className="ml-3 whitespace-nowrap">{text}</span>
         )}
       </button>
     );
   };
 
   return (
-    <div className="h-screen sticky top-0 flex flex-col"
-      style={{
-        width: isCollapsed ? "64px" : "280px",
-        backgroundColor: "#141726",
-        transition: "width 0.3s ease"
-      }}>
+    <div 
+  className={`h-screen fixed lg:sticky top-0 flex flex-col bg-[#141726] transition-all duration-300 ease-in-out ${
+    isCollapsed && isMobile ? '-translate-x-full' : 'translate-x-0'
+  }`}
+  style={{
+    width: isCollapsed ? "64px" : "280px",
+    zIndex: 50
+  }}
+>
       <div className="p-4 flex items-center justify-between">
-        {!isCollapsed && (
-          <img
-            src="/logo_wht.png"
-            alt="Logo"
-            style={{
-              height: "32px",
-              width: "auto"
-            }}
-          />
-        )}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-2 text-white hover:text-gray-300"
-          style={{
-            marginLeft: isCollapsed ? "0" : "auto",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer"
-          }}
-        >
-          <Menu size={24} />
-        </button>
-      </div>
+  {!isCollapsed && (
+    <img
+      src="/logo_wht.png"
+      alt="Logo"
+      style={{
+        height: "32px",
+        width: "auto"
+      }}
+    />
+  )}
+  {/* Only show this button on larger screens */}
+  <button
+    onClick={() => setIsCollapsed(!isCollapsed)}
+    className="p-2 text-white hover:text-gray-300 hidden lg:block" // Added hidden lg:block
+    style={{
+      marginLeft: isCollapsed ? "0" : "auto",
+      background: "transparent",
+      border: "none",
+      cursor: "pointer"
+    }}
+  >
+    <Menu size={24} />
+  </button>
+</div>
 
       <div className="flex-1 px-2 py-4">
         {navButton("/dashboard", <LayoutDashboard size={20} />, "Dashboard")}
@@ -111,10 +136,19 @@ const Sidebar = ({ email, onSignOut }) => {
             <LogOut size={20} />
           </div>
           {!isCollapsed && (
-            <span className="ml-3">Sign Out</span>
+            <span className="ml-3 whitespace-nowrap">Sign Out</span>
           )}
         </button>
       </div>
+
+      {/* Mobile Overlay */}
+      {!isCollapsed && isMobile && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          style={{ marginLeft: "280px" }}
+          onClick={() => setIsCollapsed(true)}
+        />
+      )}
     </div>
   );
 };
