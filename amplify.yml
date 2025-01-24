@@ -5,11 +5,11 @@ frontend:
       commands:
         - 'echo "Starting build process for environment: ${ENVIRONMENT}"'
         - cd frontend
+        - echo '{"presets":["react-app"],"plugins":["@babel/plugin-proposal-private-property-in-object"]}' > .babelrc
         - npm cache clean --force
-        - rm -rf node_modules package-lock.json
         - npm install
+        - npm install @babel/core @babel/plugin-proposal-private-property-in-object
         - npm install -g react-scripts
-        - npm ls @babel/plugin-proposal-private-property-in-object || npm install --save @babel/plugin-proposal-private-property-in-object@^7.21.11
         - cd ../backend
         - npm ci
         - cd ../frontend
@@ -26,7 +26,7 @@ frontend:
         - mkdir -p dist
         - cp server.js server-config.js package.json package-lock.json ./dist/
         - cd dist
-        - 'if [ "${ENVIRONMENT}" = "testing" ]; then npm ci; else npm ci --production; fi'
+        - npm ci
         - echo "exports.handler = require('./server.js').handler;" > index.js
         - 'echo "Backend build completed"'
         - 'echo "Final environment check"'
