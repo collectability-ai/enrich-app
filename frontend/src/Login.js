@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logger from './logger';
 import { Link, useNavigate } from 'react-router-dom';
 import { signIn } from 'aws-amplify/auth';  // Changed this import
 
@@ -15,7 +16,7 @@ const Login = () => {
       await signIn({ username: email, password });  // Changed to match working version
       navigate('/dashboard');
     } catch (error) {
-      console.error('Error during sign in:', error);
+      logger.error('Error during sign in:', error);
       
       if (error.message.includes('User does not exist')) {
         setError('No account found with this email address. Need an account? Sign up now.');

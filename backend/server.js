@@ -4,260 +4,211 @@ const {
   express,
   stripe,
   logger,
+  envLogger,
+  FRONTEND_URL,
   verifyToken,
   dynamoDBDocClient,
   CREDIT_COSTS,
   USER_CREDITS_TABLE,
   SEARCH_HISTORY_TABLE,
   allowedOrigins,
+  stripePriceIDs,
+  isLambda,
+  ENVIRONMENT,
+  isProduction,
+  signer,
+  getUserCredits,
+  updateUserCreditsWithRetry,
+  logSearchHistory,
+  signUpUser,
+  cognitoClient,
+  InitiateAuthCommand,
+  SignatureV4,
+  Sha256,
+  HttpRequest,
+  validateEnvironmentVariables,
+  initializeUserCredits,
+  verifyCreditsUpdate,
+  validatePurchaseRequest,
+  API_ENDPOINT
 } = require("./server-config");
 
+// Third-party dependencies
 const awsServerlessExpress = require('aws-serverless-express');
 const path = require("path");
-const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const axios = require("axios");
 
+
+
+// AWS SDK imports
 const {
-  DynamoDBDocumentClient,
   GetCommand,
   ScanCommand,
   UpdateCommand,
   PutCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
-// AWS SDK v3 imports for API signing
-const { HttpRequest } = require("@aws-sdk/protocol-http");
-const { SignatureV4 } = require("@aws-sdk/signature-v4");
-const { Sha256 } = require("@aws-crypto/sha256-browser");
-const axios = require("axios");
-
 // Debug logging for environment setup
-console.log("Starting server...");
-console.log("Environment:", process.env.NODE_ENV);
-console.log("AWS Configuration:");
-console.log("- AWS_ACCESS_KEY_ID:", process.env.AWS_ACCESS_KEY_ID ? "Exists" : "Missing");
-console.log("- AWS_SECRET_ACCESS_KEY:", process.env.AWS_SECRET_ACCESS_KEY ? "Exists" : "Missing");
-console.log("- AWS_REGION:", process.env.AWS_REGION);
-console.log("Allowed Origins for CORS:", allowedOrigins);
-
-// Enhanced Utility Functions
-async function getUserCredits(email) {
-  if (!email) {
-    logger.error("No email provided to getUserCredits");
-    return 0;
-  }
-
-  const params = {
-    TableName: USER_CREDITS_TABLE,
-    Key: { email: email },
-  };
-
-  try {
-    logger.info(`Fetching credits for user: ${email}`);
-    const result = await dynamoDBDocClient.send(new GetCommand(params));
-    return result.Item ? result.Item.credits : 0;
-  } catch (error) {
-    logger.error("Error fetching user credits:", error);
-    return 0;
-  }
-}
-
-async function updateUserCreditsWithRetry(email, credits, maxRetries = 3) {
-  let retries = 0;
-  while (retries < maxRetries) {
-    try {
-      logger.info(`Attempt ${retries + 1}: Updating credits for user ${email} to ${credits}`);
-      await dynamoDBDocClient.send(
-        new UpdateCommand({
-          TableName: USER_CREDITS_TABLE,
-          Key: { email },
-          UpdateExpression: "SET credits = :credits",
-          ExpressionAttributeValues: { ":credits": credits },
-          ReturnValues: "UPDATED_NEW",
-        })
-      );
-      logger.info(`Successfully updated credits for ${email}`);
-      return true;
-    } catch (error) {
-      logger.error(`Attempt ${retries + 1} failed:`, error);
-      retries++;
-      if (retries === maxRetries) {
-        throw new Error('Failed to update credits after multiple attempts');
-      }
-      // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
-    }
-  }
-}
-
-async function verifyCreditsUpdate(email, expectedCredits, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    const currentCredits = await getUserCredits(email);
-    if (currentCredits === expectedCredits) {
-      return true;
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
-  }
-  return false;
-}
-
-async function logSearchHistory(
-  email,
-  searchQuery,
-  requestID,
-  status,
-  rawResponse = null,
-  EnVrequestID = null
-) {
-  const now = new Date();
-  const timestamp = new Date(now.getTime() - 7 * 60 * 60 * 1000).toISOString();
-
-  try {
-    logger.info(`Logging search history for ${email}, requestID: ${requestID}`);
-    await dynamoDBDocClient.send(
-      new PutCommand({
-        TableName: SEARCH_HISTORY_TABLE,
-        Item: {
-          requestID,
-          timestamp,
-          email,
-          EnVrequestID: EnVrequestID || "N/A",
-          searchQuery,
-          status,
-          rawResponse: rawResponse ? JSON.stringify(rawResponse) : "N/A",
-        },
-      })
-    );
-    logger.info("Search history logged successfully:", { requestID, email });
-  } catch (error) {
-    logger.error("Error logging search history:", {
-      errorMessage: error.message,
-      requestID,
-      email,
-      stack: error.stack,
-    });
-    throw error;
-  }
-}
-
-async function validatePurchaseRequest(email, priceId, paymentMethodId) {
-  if (!email || !priceId || !paymentMethodId) {
-    throw new Error('Missing required fields');
-  }
-
-  // Verify user exists
-  const userCredits = await getUserCredits(email);
-  if (userCredits === null) {
-    await initializeUserCredits(email);
-  }
-
-  // Verify price ID is valid
-  const creditTiers = {
-    'price_1QOubIAUGHTClvwyCb4r0ffE': { amount: 200, credits: 3 },
-    'price_1QOv9IAUGHTClvwyRj2ChIb3': { amount: 597, credits: 10 },
-    'price_1QOv9IAUGHTClvwyzELdaAiQ': { amount: 1997, credits: 50 },
-    'price_1QOv9IAUGHTClvwyxw7vJURF': { amount: 4997, credits: 150 },
-    'price_1QOv9IAUGHTClvwyMRquKtpG': { amount: 11997, credits: 500 },
-    'price_1QOv9IAUGHTClvwyBH9Jh7ir': { amount: 19997, credits: 1000 },
-    'price_1QOv9IAUGHTClvwykbXsElbr': { amount: 27997, credits: 1750 }
-  };
-
-  if (!creditTiers[priceId]) {
-    throw new Error('Invalid price ID');
-  }
-
-  return creditTiers[priceId];
-}
-
-async function signUpUser(userData) {
-  const params = {
-    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
-    Username: userData.email,
-    Password: userData.password,
-    UserAttributes: [
-      { Name: "email", Value: userData.email },
-      { Name: "phone_number", Value: userData.phone },
-      { Name: "name", Value: userData.name },
-      { Name: "custom:companyName", Value: userData.companyName },
-      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
-      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
-      { Name: "custom:useCase", Value: userData.useCase },
-    ],
-  };
-
-  try {
-    logger.info(`Signing up user: ${userData.email}`);
-    return await cognitoClient.send(new SignUpCommand(params));
-  } catch (error) {
-    logger.error("Error signing up user:", error);
-    throw error;
-  }
-}
-
-// Stripe Webhook Handler
-app.post('/webhook', express.raw({type: 'application/json'}), async (request, response) => {
-  const sig = request.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(
-      request.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    logger.error('Webhook signature verification failed:', err.message);
-    return response.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // Handle the checkout.session.completed event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    
-    try {
-      const customerEmail = session.metadata.userEmail;
-      const creditsToAdd = parseInt(session.metadata.credits);
-      
-      // Fetch current credits
-      const currentCredits = await getUserCredits(customerEmail);
-      
-      // Update with new credits
-      await updateUserCredits(customerEmail, currentCredits + creditsToAdd);
-      
-      logger.info(`Credits updated after successful checkout: ${customerEmail} +${creditsToAdd}`);
-    } catch (error) {
-      logger.error('Error updating credits after checkout:', error);
-    }
-  }
-
-  response.json({received: true});
+logger.info("Server Configuration:", {
+  environment: ENVIRONMENT,
+  frontendUrl: FRONTEND_URL,
+  apiEndpoint: API_ENDPOINT,
+  aws: {
+    region: process.env.AWS_REGION,
+    hasAccessKeyId: !!process.env.AWS_ACCESS_KEY_ID,
+    hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+  },
+  isProduction,
+  isLambda,
+  corsOrigins: allowedOrigins
 });
 
-// Enhanced Initialize User Function
-async function initializeUserCredits(email) {
-  try {
-    const params = {
-      TableName: USER_CREDITS_TABLE,
-      Item: {
-        email,
-        credits: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      ConditionExpression: "attribute_not_exists(email)"
-    };
+// Enhanced Utility Functions
+// Enhanced Stripe Webhook Handler
+app.post(
+  '/webhook',
+  express.raw({ type: 'application/json' }),
+  async (request, response) => {
+    const sig = request.headers['stripe-signature'];
+    let event;
 
-    await dynamoDBDocClient.send(new PutCommand(params));
-    logger.info(`Initialized new user: ${email}`);
-    return true;
-  } catch (error) {
-    if (error.name === 'ConditionalCheckFailedException') {
-      logger.info(`User ${email} already exists`);
-      return true;
+    try {
+      // Verify and construct the event
+      event = stripe.webhooks.constructEvent(
+        request.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+
+      logger.info('Successfully constructed Stripe event:', {
+        type: event.type,
+        id: event.id,
+      });
+
+      const { type, data } = event;
+
+      switch (type) {
+        case 'checkout.session.completed': {
+          const session = data.object;
+
+          logger.info('Processing checkout.session.completed:', {
+            sessionId: session.id,
+            metadata: session.metadata,
+          });
+
+          try {
+            const customerEmail = session.metadata?.userEmail;
+            const creditsToAdd = parseInt(session.metadata?.credits, 10);
+            const sessionId = session.id;
+
+            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+              throw new Error('Invalid metadata in session');
+            }
+
+            // Check if credits are already updated for this session
+            const sessionProcessed = await isSessionProcessed(sessionId);
+            if (sessionProcessed) {
+              logger.info('Credits already updated for session:', { sessionId });
+              break;
+            }
+
+            // Update User Credits
+            let currentCredits = await getUserCredits(customerEmail);
+            const newTotalCredits = currentCredits + creditsToAdd;
+
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info('Credits updated successfully:', {
+              customerEmail,
+              previousCredits: currentCredits,
+              addedCredits: creditsToAdd,
+              newTotalCredits,
+            });
+
+            // Mark the session as processed
+            await markSessionProcessed(sessionId);
+
+            // Log Payment History
+            if (typeof logPaymentHistory === 'function') {
+              await logPaymentHistory(customerEmail, {
+                productId: session.metadata?.productId || 'Unknown',
+                credits: creditsToAdd || 'N/A',
+                amount: session.amount_total / 100,
+                status: 'succeeded',
+                sessionId: session.id,
+              });
+            } else {
+              logger.error('logPaymentHistory function is not defined.');
+            }
+          } catch (err) {
+            logger.error('Error processing checkout.session.completed:', {
+              error: err.message,
+              stack: err.stack,
+            });
+            throw err;
+          }
+          break;
+        }
+
+        case 'payment_intent.succeeded': {
+          const paymentIntent = data.object;
+
+          logger.info('Processing payment_intent.succeeded:', {
+            paymentIntentId: paymentIntent.id,
+            metadata: paymentIntent.metadata,
+          });
+
+          if (paymentIntent.metadata?.fromCheckoutSession) {
+            logger.info('Skipping payment_intent.succeeded, handled by checkout.session.completed');
+            break;
+          }
+
+          try {
+            const customerEmail = paymentIntent.metadata?.userEmail;
+            const creditsToAdd = parseInt(paymentIntent.metadata?.credits, 10);
+
+            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+              throw new Error('Invalid metadata in payment intent');
+            }
+
+            // Update User Credits
+            let currentCredits = await getUserCredits(customerEmail);
+            const newTotalCredits = currentCredits + creditsToAdd;
+
+            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+            logger.info('Credits updated successfully:', {
+              customerEmail,
+              previousCredits: currentCredits,
+              addedCredits: creditsToAdd,
+              newTotalCredits,
+            });
+          } catch (err) {
+            logger.error('Error processing payment_intent.succeeded:', {
+              error: err.message,
+              stack: err.stack,
+            });
+            throw err;
+          }
+          break;
+        }
+
+        default:
+          logger.warn(`Unhandled event type: ${type}`);
+      }
+
+      response.status(200).json({ received: true });
+    } catch (err) {
+      logger.error('Webhook error:', {
+        error: err.message,
+        stack: err.stack,
+      });
+
+      response.status(400).send(`Webhook Error: ${err.message}`);
     }
-    logger.error('Error initializing user credits:', error);
-    return false;
   }
-}
+);
+
 
 // Routes
 // Route: Secure Endpoint (Example for Token Validation)
@@ -267,230 +218,243 @@ app.post("/secure-endpoint", verifyToken, (req, res) => {
 
 // Route: Purchase Pack
 app.post("/purchase-pack", async (req, res) => {
-  const { email, priceId, paymentMethodId } = req.body;
+  const { email, productId, paymentMethodId } = req.body;
+
+  // Log the incoming payload
+  logger.info("Purchase pack request received:", { email, productId, paymentMethodId });
+
   let paymentIntent = null;
 
   try {
-    logger.info("Purchase pack request received:", { email, priceId, paymentMethodId });
-
     // Validate required fields
-    if (!email || !priceId || !paymentMethodId) {
-      throw new Error('Missing required fields');
+    if (!email || !productId || !paymentMethodId) {
+      logger.error("Missing required fields:", { email, productId, paymentMethodId });
+      return res.status(400).json({ error: "Missing required fields: email, productId, or paymentMethodId" });
     }
 
-    // Ensure user exists in DynamoDB
-    const currentCredits = await getUserCredits(email);
-    if (currentCredits === null) {
-      await initializeUserCredits(email);
-    }
-
-    // Get or create Stripe customer
+    // Retrieve or create the Stripe customer
     const customers = await stripe.customers.list({ email });
     let customer = customers.data.find((c) => c.email === email);
 
     if (!customer) {
       customer = await stripe.customers.create({ email });
-      logger.info("Created new customer:", customer.id);
+      logger.info("Created new Stripe customer:", { customerId: customer.id });
     }
 
-    // Define credit tiers
-    const creditTiers = {
-      "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 },
-      "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
-      "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
-      "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
-      "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
-      "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
-      "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 }
+    // Define credit tiers by productId
+    const creditTiersByProductId = {
+      prod_basic3: { amount: 200, credits: 3 },
+      prod_basic10: { amount: 597, credits: 10 },
+      prod_basic50: { amount: 1997, credits: 50 },
+      prod_popular150: { amount: 4997, credits: 150 },
+      prod_premium500: { amount: 11997, credits: 500 },
+      prod_premium1000: { amount: 19997, credits: 1000 },
+      prod_premium1750: { amount: 27997, credits: 1750 },
     };
 
-    const selectedTier = creditTiers[priceId];
+    // Validate productId and retrieve the associated tier
+    const selectedTier = creditTiersByProductId[productId];
     if (!selectedTier) {
-      throw new Error('Invalid price ID');
+      logger.error("Invalid product ID:", { productId });
+      return res.status(400).json({ error: `Invalid product ID: ${productId}` });
     }
 
-    // Create payment intent
-    paymentIntent = await stripe.paymentIntents.create({
+    // Dynamically determine the frontend URL
+    const origin = req.headers.origin;
+    const frontendUrl = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+
+    // Log selected tier details
+    logger.info("Selected tier details:", selectedTier);
+
+    // Create the payment intent with metadata for the webhook
+paymentIntent = await stripe.paymentIntents.create({
+  amount: selectedTier.amount,
+  currency: "usd",
+  customer: customer.id,
+  payment_method: paymentMethodId,
+  confirm: true,
+  metadata: {
+    credits: selectedTier.credits.toString(),
+    userEmail: email,
+    productId: productId,
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    fromCheckoutSession: false, // Indicates this is not from checkout.session
+  },
+  automatic_payment_methods: {
+    enabled: true,
+    allow_redirects: "never",
+  },
+});
+
+
+
+    logger.info("Payment intent created:", {
+      paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
       amount: selectedTier.amount,
-      currency: "usd",
-      customer: customer.id,
-      payment_method: paymentMethodId,
-      confirm: true,
-      metadata: {
-        credits: selectedTier.credits,
-        userEmail: email
-      },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: "never"
-      }
+      credits: selectedTier.credits,
     });
 
-    // Update credits with retry mechanism
-    const newCredits = (currentCredits || 0) + selectedTier.credits;
-    await updateUserCreditsWithRetry(email, newCredits);
+    // Update user's credits in the database
+    const currentCredits = await getUserCredits(email);
+    const newTotalCredits = currentCredits + selectedTier.credits;
 
-    // Verify credits were updated
-    const verified = await verifyCreditsUpdate(email, newCredits);
-    if (!verified) {
-      logger.error('Credits update verification failed', {
-        email,
-        expectedCredits: newCredits,
-        paymentIntentId: paymentIntent.id
-      });
-      
-      // Still return success but flag for admin attention
-      res.status(200).send({
-        message: "Payment processed successfully. Credits may take a few minutes to appear.",
-        remainingCredits: await getUserCredits(email),
-        requiresVerification: true
-      });
-      return;
-    }
+    await updateUserCreditsWithRetry(email, newTotalCredits);
+    logger.info("User credits updated successfully:", { email, newTotalCredits });
 
-    // Success response
-    res.status(200).send({
-      message: "Credits purchased successfully.",
-      remainingCredits: newCredits
+    // Return the updated credit balance in the response
+    res.status(200).json({
+      message: "Payment processed successfully.",
+      paymentIntentId: paymentIntent.id,
+      remainingCredits: newTotalCredits,
     });
-
   } catch (err) {
-    logger.error(`Error purchasing credits for ${email}:`, err);
-
-    // If payment was processed but credits failed
-    if (paymentIntent?.status === 'succeeded') {
-      logger.error('CRITICAL: Payment succeeded but credits failed to update', {
-        email,
-        paymentIntentId: paymentIntent.id,
-        error: err.message
-      });
-
-      res.status(500).send({
-        error: {
-          message: "Payment processed but credits may be delayed. Our team has been notified.",
-          paymentIntentId: paymentIntent.id,
-          requiresSupport: true
-        }
-      });
-      return;
-    }
+    logger.error("Error in purchase-pack:", {
+      error: err.message,
+      email,
+      productId,
+      paymentIntentId: paymentIntent?.id,
+    });
 
     // Handle Stripe-specific errors
-    if (err.type === 'StripeCardError') {
-      res.status(400).send({
+    if (err.type === "StripeCardError") {
+      return res.status(400).json({
         error: {
           message: "Your card was declined. Please try a different payment method.",
-          code: err.code
-        }
+          code: err.code,
+        },
       });
-      return;
     }
 
     // General error response
-    res.status(400).send({
+    res.status(400).json({
       error: {
-        message: err.message || "Purchase failed. Please try again."
-      }
+        message: err.message || "Purchase failed. Please try again.",
+      },
     });
   }
 });
 
+
+// Route: Create Checkout Session
 // Route: Create Checkout Session
 app.post("/create-checkout-session", async (req, res) => {
-  const { email, priceId } = req.body;
+  const { email, productId } = req.body;
 
-  logger.info("Creating checkout session for:", { email, priceId });
+  logger.info("Creating checkout session for:", { email, productId });
 
-  // Define the credit tiers and their Stripe price IDs
+  // Define credit tiers and their details
   const creditTiers = {
-    "price_1QOv9IAUGHTClvwyRj2ChIb3": { amount: 597, credits: 10 },
-    "price_1QOv9IAUGHTClvwyzELdaAiQ": { amount: 1997, credits: 50 },
-    "price_1QOv9IAUGHTClvwyxw7vJURF": { amount: 4997, credits: 150 },
-    "price_1QOv9IAUGHTClvwyMRquKtpG": { amount: 11997, credits: 500 },
-    "price_1QOv9IAUGHTClvwyBH9Jh7ir": { amount: 19997, credits: 1000 },
-    "price_1QOv9IAUGHTClvwykbXsElbr": { amount: 27997, credits: 1750 },
-    "price_1QOubIAUGHTClvwyCb4r0ffE": { amount: 200, credits: 3 }
+    prod_basic3: { amount: 200, credits: 3 },
+    prod_basic10: { amount: 597, credits: 10 },
+    prod_basic50: { amount: 1997, credits: 50 },
+    prod_popular150: { amount: 4997, credits: 150 },
+    prod_premium500: { amount: 11997, credits: 500 },
+    prod_premium1000: { amount: 19997, credits: 1000 },
+    prod_premium1750: { amount: 27997, credits: 1750 },
   };
 
   try {
     // Validate request data
-    if (!email || !priceId) {
-      logger.error("Missing required fields:", { email, priceId });
-      return res.status(400).send({ error: "Email and Price ID are required" });
+    if (!email || !productId) {
+      logger.error("Missing required fields:", { email, productId });
+      return res.status(400).send({ error: "Email and productId are required" });
     }
 
-    // Validate price ID
-    if (!creditTiers[priceId]) {
-      logger.error("Invalid price ID:", priceId);
-      return res.status(400).send({ error: "Invalid price ID" });
+    // Validate productId
+    const priceId = stripePriceIDs[productId];
+    const creditTier = creditTiers[productId];
+    if (!priceId || !creditTier) {
+      logger.error("Invalid productId or missing mappings:", { productId });
+      return res.status(400).send({ error: "Invalid productId or missing mappings" });
     }
 
-    // Look for an existing customer
+    const { amount, credits } = creditTier;
+
+    // Determine the correct frontend URL
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      (process.env.REACT_APP_ENVIRONMENT === "production"
+        ? "https://app.contactvalidate.com"
+        : "https://testing.contactvalidate.com");
+
+    // Look for or create a customer
     let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: email,
-      limit: 1,
-    });
-
+    const existingCustomers = await stripe.customers.list({ email, limit: 1 });
     if (existingCustomers.data.length === 0) {
-      customer = await stripe.customers.create({
-        email: email,
-      });
-      logger.info("Created new customer:", customer.id);
+      customer = await stripe.customers.create({ email });
+      logger.info(`Created new customer: ${customer.id}`);
     } else {
       customer = existingCustomers.data[0];
-      logger.info("Found existing customer:", customer.id);
+      logger.info(`Found existing customer: ${customer.id}`);
     }
+
+    // Log session creation details
+    logger.info("Preparing to create Stripe Checkout Session with:", {
+      productId,
+      priceId,
+      amount,
+      credits,
+      email,
+      frontendUrl,
+    });
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ["card"],
-      line_items: [{
-        price: priceId,
-        quantity: 1,
-      }],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
       mode: "payment",
       payment_intent_data: {
-        setup_future_usage: 'off_session',
+        setup_future_usage: "off_session", // Save payment method for future use
         metadata: {
-          credits: creditTiers[priceId].credits,
-          userEmail: email
-        }
+          credits: credits.toString(),
+          userEmail: email,
+          productId: productId,
+          environment: process.env.REACT_APP_ENVIRONMENT || "development",
+          timestamp: new Date().toISOString(),
+        },
       },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?status=cancel`,
       metadata: {
-        credits: creditTiers[priceId].credits,
-        userEmail: email
+        credits: credits.toString(),
+        userEmail: email,
+        productId: productId,
+        environment: process.env.REACT_APP_ENVIRONMENT || "development",
+        timestamp: new Date().toISOString(),
       },
+      success_url: `${frontendUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${frontendUrl}/dashboard?status=cancel`,
       allow_promotion_codes: true,
       billing_address_collection: "required",
-      submit_type: "pay"
+      submit_type: "pay",
     });
 
-    logger.info("Checkout session created:", {
+    // Log successful session creation
+    logger.info("Checkout session created successfully:", {
       sessionId: session.id,
       customerId: customer.id,
-      email: email
+      email,
+      credits,
+      productId,
     });
 
-    res.status(200).json({
-      url: session.url,
-      sessionId: session.id
-    });
-
+    // Send the session URL back to the client
+    res.status(200).json({ url: session.url, sessionId: session.id });
   } catch (error) {
+    // Log error details
     logger.error("Error creating checkout session:", {
       error: error.message,
       stack: error.stack,
-      email: email,
-      priceId: priceId
+      email,
+      productId,
     });
-    res.status(500).send({ 
-      error: "Failed to create checkout session",
-      details: error.message
-    });
+    res.status(500).send({ error: "Failed to create checkout session", details: error.message });
   }
 });
 
@@ -540,48 +504,54 @@ app.post("/get-payment-methods", verifyToken, async (req, res) => {
 
 // Create setup intent route
 app.post("/create-setup-intent", verifyToken, async (req, res) => {
-    try {
-        const email = req.user?.email;
-        logger.info(`Creating setup intent for user: ${email}`);
+  try {
+    const email = req.user?.email;
 
-        if (!email) {
-            return res.status(401).send({ error: "Unauthorized access" });
-        }
-
-        const customers = await stripe.customers.list({ email });
-        let customer = customers.data[0];
-        
-        if (!customer) {
-            customer = await stripe.customers.create({ email });
-            logger.info(`Created new customer: ${customer.id}`);
-        }
-
-        const paymentMethods = await stripe.paymentMethods.list({
-            customer: customer.id,
-            type: "card",
-        });
-
-        if (paymentMethods.data.length >= 2) {
-            return res.status(400).send({ 
-                error: "Maximum of 2 payment methods allowed. Please remove one before adding another." 
-            });
-        }
-
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            mode: 'setup',
-            customer: customer.id,
-            success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_success=true`,
-            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?setup_canceled=true`,
-        });
-
-        res.status(200).send({ url: session.url });
-        logger.info(`Setup session created for ${email}: ${session.id}`);
-
-    } catch (error) {
-        logger.error("Error creating setup intent:", error);
-        res.status(500).send({ error: "Failed to create setup intent" });
+    if (!email) {
+      logger.error("Unauthorized access: Missing email.");
+      return res.status(401).send({ error: "Unauthorized access" });
     }
+
+    logger.info(`Creating setup intent for user: ${email}`);
+
+    // Retrieve or create Stripe customer
+    const customers = await stripe.customers.list({ email });
+    let customer = customers.data[0];
+    if (!customer) {
+      customer = await stripe.customers.create({ email });
+      logger.info(`Created new customer: ${customer.id}`);
+    }
+
+    // Ensure the customer has fewer than 2 payment methods
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customer.id,
+      type: "card",
+    });
+
+    if (paymentMethods.data.length >= 2) {
+      logger.warn("User has maximum allowed payment methods:", { email });
+      return res.status(400).send({
+        error: "Maximum of 2 payment methods allowed. Please remove one before adding another.",
+      });
+    }
+
+    // Create Stripe Checkout session in "setup" mode
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "setup",
+      customer: customer.id,
+      billing_address_collection: 'required',
+      success_url: `${frontendUrl}/dashboard?setup_success=true`,
+      cancel_url: `${frontendUrl}/dashboard?setup_canceled=true`,
+    });
+
+    logger.info(`Setup session created: ${session.id}`, { email });
+    res.status(200).send({ url: session.url });
+  } catch (error) {
+    logger.error("Error in /create-setup-intent:", { message: error.message, stack: error.stack });
+    res.status(500).send({ error: "Failed to create setup intent." });
+  }
 });
 
 // Set default payment method
@@ -704,59 +674,102 @@ app.post("/delete-payment-method", verifyToken, async (req, res) => {
 // Route: Get Purchase History
 app.post("/get-purchase-history", async (req, res) => {
     const { email } = req.body;
-    logger.info(`Fetching purchase history for user: ${email}`);
 
     if (!email) {
         return res.status(400).send({ error: { message: "Email is required" } });
     }
 
     try {
+        // Fetch Stripe customer
         const customers = await stripe.customers.list({ email });
         const customer = customers.data.find((c) => c.email === email);
 
         if (!customer) {
-            logger.info(`No Stripe customer found for email: ${email}`);
             return res.status(200).send({ history: [], message: "No purchase history found" });
         }
 
+        // Fetch payment intents
         const paymentIntents = await stripe.paymentIntents.list({
             customer: customer.id,
-            limit: 10,
+            limit: 50,
         });
 
-        const history = paymentIntents.data.map((payment) => ({
-            amount: payment.amount / 100,
-            currency: payment.currency.toUpperCase(),
-            status: payment.status,
-            date: new Date(payment.created * 1000).toLocaleString(),
-            description: payment.description || "Credit Purchase",
-        }));
+        // Fetch checkout sessions (include $0 transactions)
+        const checkoutSessions = await stripe.checkout.sessions.list({
+            customer: customer.id,
+            limit: 50,
+        });
+
+        // Map product IDs to readable descriptions
+        const productMap = {
+            prod_basic3: { name: "3 Credits Pack", credits: 3 },
+            prod_basic10: { name: "10 Credits Pack", credits: 10 },
+            prod_basic50: { name: "50 Credits Pack", credits: 50 },
+            prod_popular150: { name: "150 Credits Pack", credits: 150 },
+            prod_premium500: { name: "500 Credits Pack", credits: 500 },
+            prod_premium1000: { name: "1000 Credits Pack", credits: 1000 },
+            prod_premium1750: { name: "1750 Credits Pack", credits: 1750 },
+            "price_1QOubIAUGHTClvwyCb4r0ffE": { name: "3 Credits Pack", credits: 3 }, // $2 test product mapping
+        };
+
+        // Combine payment intents and checkout sessions
+        const history = [
+            ...paymentIntents.data.map((payment) => ({
+                amount: payment.amount / 100,
+                currency: payment.currency.toUpperCase(),
+                status: payment.status,
+                date: new Date(payment.created * 1000).toLocaleString(),
+                description: productMap[payment.metadata?.productId]?.name || "Unknown Product",
+                credits: productMap[payment.metadata?.productId]?.credits || "N/A",
+            })),
+            ...checkoutSessions.data
+                .filter((session) => session.amount_total === 0) // Only include $0 transactions
+                .map((session) => ({
+                    amount: 0,
+                    currency: "USD",
+                    status: "succeeded",
+                    date: new Date(session.created * 1000).toLocaleString(),
+                    description: productMap[session.metadata?.productId]?.name || "No-cost Order",
+                    credits: productMap[session.metadata?.productId]?.credits || "N/A",
+                })),
+        ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
         res.status(200).send({ history });
-        logger.info(`Successfully retrieved purchase history for ${email}`);
     } catch (error) {
         logger.error(`Error fetching purchase history: ${error.message}`);
         res.status(500).send({ error: "Failed to fetch purchase history" });
     }
 });
 
+
 // Route: Check or Fetch Credits
 app.post("/check-credits", async (req, res) => {
-  console.log("Check Credits endpoint hit");
+  // Log that the endpoint was hit
+  logger.info("Check Credits endpoint hit");
+  
+  // Log the request headers and body for debugging
+  logger.info("Request headers:", req.headers);
+  logger.info("Request body:", req.body);
+
   const { email } = req.body;
 
   if (!email) {
+    logger.warn("Check Credits: Email is missing in request body");
     return res.status(400).json({ error: "Email is required" });
   }
 
   try {
+    logger.info(`Fetching credits for email: ${email}`);
     const credits = await getUserCredits(email);
+    logger.info(`Credits fetched successfully for ${email}: ${credits}`);
+
     res.status(200).json({ email, credits });
   } catch (err) {
-    console.error("Error checking credits:", err);
+    logger.error("Error checking credits:", err);
     res.status(500).json({ error: "Failed to fetch credits" });
   }
 });
+
 
 // Route: Add Credits
 app.post("/add-credits", async (req, res) => {
@@ -773,7 +786,7 @@ app.post("/add-credits", async (req, res) => {
 
     // Update credits
     const newCredits = currentCredits + creditsToAdd;
-    await updateUserCredits(email, newCredits);
+    await updateUserCreditsWithRetry(email, newCredits);
 
     // Respond with the updated credit count
     res.status(200).send({
@@ -852,61 +865,52 @@ app.post("/use-search", async (req, res) => {
 
     logger.info("Payload prepared for external API:", { payload, requestID });
 
-    // Step 5: Prepare and sign the API request
-    const request = new HttpRequest({
-      hostname: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
-      path: "/SandBox/enrichandvalidatev2",
-      method: "POST",
-      body: JSON.stringify(payload),
-      headers: {
-        "Content-Type": "application/json",
-        Host: "8zb4x5d8q4.execute-api.us-east-2.amazonaws.com",
-        "x-api-key": process.env.API_KEY, // Include the API key
-      },
-    });
+// Step 5: Prepare and sign the API request
+const url = new URL(process.env.API_ENDPOINT);
 
-   // Initialize the SignatureV4 signer with the SHA-256 hash constructor
-const signer = new SignatureV4({
-  service: "execute-api",
-  region: process.env.AWS_REGION, // Dynamic region from environment variables
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Dynamically loaded from environment
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Dynamically loaded from environment
+const request = new HttpRequest({
+  hostname: url.hostname,
+  path: url.pathname,
+  method: "POST",
+  body: JSON.stringify(payload),
+  headers: {
+    "Content-Type": "application/json",
+    Host: url.hostname,
+    "x-api-key": process.env.API_KEY,
   },
-  sha256: Sha256, // Explicit SHA-256 hash implementation
 });
 
-    const signedRequest = await signer.sign(request);
+// Use the shared signer from server-config.js
+const signedRequest = await signer.sign(request);
 
-    // Log signed request headers for debugging
-    logger.info("Signed request headers:", {
-      headers: signedRequest.headers,
-    });
+// Log signed request headers for debugging
+logger.info("Signed request headers:", {
+  headers: signedRequest.headers,
+});
 
-    // Step 6: Make the signed API call
-    let apiResponse;
-    try {
-      logger.info("Sending signed request to external API...");
-      const response = await axios({
-        method: signedRequest.method,
-        url: `https://${signedRequest.hostname}${signedRequest.path}`,
-        headers: signedRequest.headers,
-        data: signedRequest.body,
-      });
+// Step 6: Make the signed API call
+let apiResponse;
+try {
+  logger.info("Sending signed request to external API...");
+  const response = await axios({
+    method: signedRequest.method,
+    url: `https://${signedRequest.hostname}${signedRequest.path}`,
+    headers: signedRequest.headers,
+    data: signedRequest.body,
+  });
 
-      apiResponse = response.data;
-      logger.info("Response received from external API:", { apiResponse, requestID });
-    } catch (apiError) {
-      logger.error("Error calling external API:", {
-        apiResponse: apiError.response?.data || null,
-        errorMessage: apiError.message,
-        requestID,
-      });
-      const errorMessage = "Failed to get valid data from the API.";
-      await logSearchHistory(email, searchQuery, requestID, errorMessage);
-      return res.status(500).send({ error: { message: errorMessage } });
-    }
-
+  apiResponse = response.data;
+  logger.info("Response received from external API:", { apiResponse, requestID });
+} catch (apiError) {
+  logger.error("Error calling external API:", {
+    apiResponse: apiError.response?.data || null,
+    errorMessage: apiError.message,
+    requestID,
+  });
+  const errorMessage = "Failed to get valid data from the API.";
+  await logSearchHistory(email, searchQuery, requestID, errorMessage);
+  return res.status(500).send({ error: { message: errorMessage } });
+}
     // Step 7: Deduct user credits
     await updateUserCreditsWithRetry(email, credits - creditCost);
 
@@ -990,34 +994,6 @@ app.post("/get-search-history", async (req, res) => {
   }
 });
 
-// Utility function to sign up a user in Cognito
-async function signUpUser(userData) {
-  const params = {
-    ClientId: process.env.COGNITO_CLIENT_ID, // Use environment variable
-    Username: userData.email,
-    Password: userData.password, // User-provided password
-    UserAttributes: [
-      { Name: "email", Value: userData.email },
-      { Name: "phone_number", Value: userData.phone },
-      { Name: "name", Value: userData.name },
-      { Name: "custom:companyName", Value: userData.companyName },
-      { Name: "custom:companyWebsite", Value: userData.companyWebsite },
-      { Name: "custom:companyEIN", Value: userData.companyEIN || "" },
-      { Name: "custom:useCase", Value: userData.useCase },
-    ],
-  };
-
-  try {
-    // Create a SignUpCommand and send it to Cognito
-    const command = new SignUpCommand(params);
-    const response = await cognitoClient.send(command);
-    return response;
-  } catch (err) {
-    console.error("Error signing up user:", err);
-    throw err;
-  }
-}
-
 // Route: User Signup
 app.post("/signup", async (req, res) => {
   const {
@@ -1060,7 +1036,7 @@ app.post("/signup", async (req, res) => {
       .status(200)
       .json({ success: true, message: "User signup successful." });
   } catch (err) {
-    console.error("Error signing up user:", err);
+    logger.error("Error signing up user:", err);
 
     // Handle Cognito-specific errors (e.g., UserExistsException)
     if (err.name === "UsernameExistsException") {
@@ -1135,7 +1111,7 @@ app.post("/login", async (req, res) => {
       message: "Login successful",
     });
   } catch (err) {
-    console.error("Login error:", err);
+    logger.error("Login error:", err);
 
     // Handle specific Cognito exceptions
     if (err.name === "NotAuthorizedException") {
@@ -1164,7 +1140,7 @@ app.get("/auth/validate", (req, res) => {
   const accessToken = req.cookies.accessToken; // Get accessToken from cookies
 
   if (!accessToken) {
-    console.error("No access token found in cookies");
+    logger.error("No access token found in cookies");
     return res.status(401).json({ success: false, message: "No access token found" });
   }
 
@@ -1172,7 +1148,7 @@ app.get("/auth/validate", (req, res) => {
   const getKey = (header, callback) => {
     client.getSigningKey(header.kid, (err, key) => {
       if (err) {
-        console.error("Error fetching signing key:", err.message);
+        logger.error("Error fetching signing key:", err.message);
         return callback(err);
       }
       callback(null, key.getPublicKey());
@@ -1182,12 +1158,12 @@ app.get("/auth/validate", (req, res) => {
   // Verify the access token
   jwt.verify(accessToken, getKey, { algorithms: ["RS256"] }, (err, decoded) => {
     if (err) {
-      console.error("Token validation failed:", err.message);
+      logger.error("Token validation failed:", err.message);
       return res.status(401).json({ success: false, message: "Invalid or expired token" });
     }
 
     // Log decoded token for debugging
-    console.info("Token successfully validated:", decoded);
+    logger.info("Token successfully validated:", decoded);
 
     // Send user data if token is valid
     res.status(200).json({ success: true, user: decoded });
@@ -1198,9 +1174,13 @@ app.get("/auth/validate", (req, res) => {
 app.all("*", (req, res) => {
   const { path, method, body } = req;
 
-  console.log(`Received request: ${method} ${path}`);
-  console.log("Request body:", body);
+  // Log the request method and path
+  logger.info(`Received request: ${method} ${path}`);
+  
+  // Log the request body for debugging
+  logger.info("Request body:", body);
 
+  // Respond with a confirmation message
   res.status(200).json({
     message: "Lambda is connected and receiving requests",
     method,
@@ -1209,18 +1189,32 @@ app.all("*", (req, res) => {
   });
 });
 
+// Move this to be the last route in server.js
+app.use((req, res) => {
+  logger.warn('Unhandled route accessed:', {
+    method: req.method,
+    path: req.path,
+    body: req.body
+  });
+  
+  res.status(404).json({
+    error: "Route not found",
+    method: req.method,
+    path: req.path
+  });
+});
+
 // Import the file system module
 const fs = require('fs');
 
 // Static file handling
 if (isLambda) {
-  // In Lambda, we only handle API requests
+  // In Lambda, we only handle API routes
   app.all('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    // All non-API requests should be handled by Amplify
-    res.status(404).send('Not Found');
+    res.status(404).json({ error: 'Not Found' });
   });
 } else {
   // Local development static file serving
@@ -1228,10 +1222,9 @@ if (isLambda) {
   if (fs.existsSync(buildPath)) {
     app.use(express.static(buildPath));
     app.get('*', (req, res) => {
-      if (req.path.startsWith('/api/')) {
-        return next();
+      if (!req.path.startsWith('/api/')) {
+        res.sendFile(path.join(buildPath, 'index.html'));
       }
-      res.sendFile(path.join(buildPath, 'index.html'));
     });
   } else {
     logger.warn('Build directory not found for local development');
@@ -1239,9 +1232,9 @@ if (isLambda) {
 }
 
 // Log before starting the server
-console.log("Starting the server...");
+logger.info("Starting the server...");
 
-// Start the server based on environment
+// Server startup and environment configuration
 if (!isLambda) {
   // Local development server
   const port = process.env.PORT || 8080;
@@ -1249,13 +1242,106 @@ if (!isLambda) {
     logger.info(`Development server running on http://localhost:${port}`);
   });
 } else {
-  // Lambda handler
+  // Lambda handler setup
+  const awsServerlessExpress = require('aws-serverless-express');
   const server = awsServerlessExpress.createServer(app);
-  exports.handler = (event, context) => {
-    logger.info('Lambda handler called:', {
-      path: event.path,
-      httpMethod: event.httpMethod
-    });
-    return awsServerlessExpress.proxy(server, event, context);
+
+  // Lambda event handler function
+  exports.handler = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false; // Prevent Lambda from waiting for the event loop to empty
+
+    const requestId = context.awsRequestId; // Set up consistent logging context
+    const logContext = {
+      requestId,
+      path: event.path || event.requestContext?.http?.path,
+      method: event.httpMethod || event.requestContext?.http?.method,
+    };
+
+    try {
+      // Normalize API Gateway v2 events for compatibility
+      if (event.version === '2.0') {
+        event = {
+          ...event,
+          httpMethod: event.requestContext.http.method,
+          path: event.requestContext.http.path,
+        };
+      }
+
+      // Ensure body is a string for Express compatibility
+      if (event.body && typeof event.body === 'object') {
+        event.body = JSON.stringify(event.body);
+      }
+
+      // Configure CORS headers
+      const headers = {
+        'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+          ? event.headers.origin
+          : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+        'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      };
+
+      // Handle OPTIONS preflight requests
+      if (event.httpMethod === 'OPTIONS') {
+        logger.info('Handling CORS preflight request', logContext);
+        return {
+          statusCode: 200,
+          headers,
+          body: '',
+        };
+      }
+
+      // Log incoming request details
+      logger.info('Processing request', {
+        ...logContext,
+        headers: event.headers,
+        body: event.body,
+      });
+
+      // Process request through aws-serverless-express
+      const response = await awsServerlessExpress.proxy(server, event, context, 'PROMISE').promise;
+
+      // Add CORS headers to response
+      const finalResponse = {
+        ...response,
+        headers: {
+          ...response.headers,
+          ...headers,
+        },
+      };
+
+      // Log successful response
+      logger.info('Request completed successfully', {
+        ...logContext,
+        statusCode: finalResponse.statusCode,
+      });
+
+      return finalResponse;
+    } catch (error) {
+      // Log error details
+      logger.error('Request failed', {
+        ...logContext,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      // Return formatted error response
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': Array.isArray(allowedOrigins) && allowedOrigins.includes(event.headers?.origin)
+            ? event.headers.origin
+            : (allowedOrigins?.[0] || '*'), // Fallback to first origin or wildcard
+          'Access-Control-Allow-Credentials': 'true',
+        },
+        body: JSON.stringify({
+          error: 'Internal server error',
+          message: isProduction ? 'An unexpected error occurred' : error.message,
+          requestId,
+        }),
+      };
+    }
   };
 }

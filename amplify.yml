@@ -3,6 +3,7 @@ frontend:
   phases:
     preBuild:
       commands:
+        - 'echo "Starting build process for environment: ${ENVIRONMENT}"'
         - cd frontend
         - npm ci
         - npm install -g react-scripts
@@ -11,26 +12,43 @@ frontend:
         - cd ../frontend
     build:
       commands:
-        - echo "Building frontend"
-        - if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi
+        - 'echo "Building frontend for ${ENVIRONMENT} environment"'
+        - 'if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi'
+        - 'echo "Environment check"'
+        - 'echo "NODE_ENV: ${NODE_ENV}"'
+        - 'echo "REACT_APP_NODE_ENV: ${REACT_APP_NODE_ENV}"'
+        - 'echo "REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}"'
+        - 'echo "Stripe configuration exists: ${REACT_APP_STRIPE_TEST_PRICE_ID_BASIC_50:+yes}"'
         - cd ../backend
-        - echo "Building backend"
         - mkdir -p dist
-        - cp server.js server-config.js package.json dist/
-        - cd dist && npm install --omit=dev
+        - cp server.js server-config.js package.json package-lock.json ./dist/
+        - cd dist
+        - 'if [ "${ENVIRONMENT}" = "testing" ]; then npm ci; else npm ci --production; fi'
+        - echo "exports.handler = require('./server.js').handler;" > index.js
+        - 'echo "Backend build completed"'
+        - 'echo "Final environment check"'
+        - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
+        - 'echo "NODE_ENV: ${NODE_ENV}"'
+        - 'echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"'
   artifacts:
     baseDirectory: frontend/build
     files:
       - '**/*'
-      - '../backend/dist/**/*'
+      - '../backend/dist/index.js'
+      - '../backend/dist/server.js'
+      - '../backend/dist/server-config.js'
+      - '../backend/dist/package.json'
+      - '../backend/dist/package-lock.json'
+      - '../backend/dist/node_modules/**/*'
   cache:
     paths:
+      - node_modules/**/*
       - frontend/node_modules/**/*
       - backend/node_modules/**/*
       - /root/.npm/**/*
   customRules:
     - source: '/api/*'
-      target: '/backend/dist/server.js'
+      target: '/backend/dist/index.js'
       status: '200'
     - source: '/*'
       target: '/index.html'
