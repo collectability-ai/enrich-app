@@ -1,6 +1,7 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
+
 $version = "v2.2.9"
 $description = "reverted back to previous working testing build to start over, production still failed - last build still had production build errors. updated install packages. localhost functional."
 
