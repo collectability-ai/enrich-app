@@ -4,6 +4,9 @@
   "private": true,
   "dependencies": {
     "@aws-amplify/auth": "^6.8.0",
+    "@babel/core": "^7.24.0",
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@babel/plugin-transform-private-property-in-object": "^7.25.9",
     "@aws-amplify/ui-react": "^6.7.0",
     "@aws-crypto/sha256-browser": "^5.2.0",
     "@aws-sdk/protocol-http": "^3.370.0",
@@ -52,13 +55,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "build:production": "REACT_APP_ENVIRONMENT=production react-scripts build",
-    "build:testing": "REACT_APP_ENVIRONMENT=testing react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject"
+ },
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -78,11 +79,18 @@
     ]
   },
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@babel/plugin-transform-private-property-in-object": "^7.25.9",
     "@shadcn/ui": "^0.0.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16"
+  },
+  "babel": {
+    "presets": [
+      "react-app"
+    ],
+    "plugins": [
+      "@babel/plugin-transform-private-property-in-object",
+      "@babel/plugin-proposal-private-property-in-object"
+    ]
   }
 }
