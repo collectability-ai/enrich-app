@@ -12,39 +12,23 @@ frontend:
         - cd ../frontend
     build:
       commands:
-        # First set all environment variables in one place
-        - |
-          if [ "${ENVIRONMENT}" = "testing" ]; then
-            export NODE_ENV=production
-            export REACT_APP_ENVIRONMENT=testing
-            export REACT_APP_API_BASE_URL=https://testing.contactvalidate.com/api
-          else
-            export NODE_ENV=production
-            export REACT_APP_ENVIRONMENT=production
-            export REACT_APP_API_BASE_URL=https://app.contactvalidate.com/api
-          fi
-        
-        # Debug logging
-        - 'echo "Environment variables set:"'
-        - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
+        - 'echo "Building frontend for ${ENVIRONMENT} environment"'
+        - 'if [ "${ENVIRONMENT}" = "testing" ]; then CI=false npm run build:testing; else CI=false npm run build:production; fi'
+        - 'echo "Environment check"'
         - 'echo "NODE_ENV: ${NODE_ENV}"'
-        - 'echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"'
+        - 'echo "REACT_APP_NODE_ENV: ${REACT_APP_NODE_ENV}"'
         - 'echo "REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}"'
-        
-        # Build frontend with single build command
-        - CI=false npm run build
-        
-        # Backend build
+        - 'echo "Stripe configuration exists: ${REACT_APP_STRIPE_TEST_PRICE_ID_BASIC_50:+yes}"'
         - cd ../backend
         - mkdir -p dist
         - cp server.js server-config.js package.json package-lock.json ./dist/
         - cd dist
-        - npm ci --omit=dev
+        - 'if [ "${ENVIRONMENT}" = "testing" ]; then npm ci; else npm ci --production; fi'
         - echo "exports.handler = require('./server.js').handler;" > index.js
         - 'echo "Backend build completed"'
-        # Final environment check
         - 'echo "Final environment check"'
         - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
+        - 'echo "NODE_ENV: ${NODE_ENV}"'
         - 'echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"'
   artifacts:
     baseDirectory: frontend/build
