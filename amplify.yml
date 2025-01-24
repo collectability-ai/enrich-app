@@ -5,9 +5,11 @@ frontend:
       commands:
         - 'echo "Starting build process for environment: ${ENVIRONMENT}"'
         - cd frontend
-        - npm ci
+        - npm cache clean --force
+        - rm -rf node_modules package-lock.json
+        - npm install
         - npm install -g react-scripts
-        - npm install --save-dev @babel/plugin-proposal-private-property-in-object@^7.21.11
+        - npm ls @babel/plugin-proposal-private-property-in-object || npm install --save @babel/plugin-proposal-private-property-in-object@^7.21.11
         - cd ../backend
         - npm ci
         - cd ../frontend
