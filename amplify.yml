@@ -17,11 +17,11 @@ frontend:
           if [ "${ENVIRONMENT}" = "testing" ]; then
             export NODE_ENV=production
             export REACT_APP_ENVIRONMENT=testing
-            export REACT_APP_API_BASE_URL=https://testing.contactvalidate.com
+            export REACT_APP_API_BASE_URL=https://testing.contactvalidate.com/api
           else
             export NODE_ENV=production
             export REACT_APP_ENVIRONMENT=production
-            export REACT_APP_API_BASE_URL=https://app.contactvalidate.com
+            export REACT_APP_API_BASE_URL=https://app.contactvalidate.com/api
           fi
         
         # Debug logging
