@@ -5,10 +5,10 @@ frontend:
       commands:
         - 'echo "Starting build process for environment: ${ENVIRONMENT}"'
         - cd frontend
-        - echo '{"presets":["react-app"],"plugins":["@babel/plugin-proposal-private-property-in-object"]}' > .babelrc
+        # Remove the .babelrc creation as we'll handle this through package.json
         - npm cache clean --force
         - npm install
-        - npm install @babel/core @babel/plugin-proposal-private-property-in-object
+        - npm install -D @babel/plugin-transform-private-property-in-object @babel/plugin-proposal-private-property-in-object
         - npm install -g react-scripts
         - cd ../backend
         - npm ci
