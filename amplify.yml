@@ -5,37 +5,48 @@ frontend:
       commands:
         - 'echo "Starting build process for environment: ${ENVIRONMENT}"'
         - cd frontend
-        # Remove the .babelrc creation as we'll handle this through package.json
-        - npm cache clean --force
-        - npm install
-        - npm install -D @babel/plugin-transform-private-property-in-object @babel/plugin-proposal-private-property-in-object
+        - npm ci
         - npm install -g react-scripts
         - cd ../backend
         - npm ci
         - cd ../frontend
-    build:
+build:
       commands:
-        - 'echo "Building frontend"'
-        - export NODE_ENV=production
-        - export CI=false
+        # First set all environment variables in one place
         - |
           if [ "${ENVIRONMENT}" = "testing" ]; then
-            export REACT_APP_API_BASE_URL=https://testing.contactvalidate.com/api
+            export NODE_ENV=production
+            export REACT_APP_ENVIRONMENT=testing
+            export REACT_APP_API_BASE_URL=https://testing.contactvalidate.com
           else
-            export REACT_APP_API_BASE_URL=https://app.contactvalidate.com/api
+            export NODE_ENV=production
+            export REACT_APP_ENVIRONMENT=production
+            export REACT_APP_API_BASE_URL=https://app.contactvalidate.com
           fi
+        
+        # Debug logging
         - 'echo "Environment variables set:"'
-        - 'echo "NODE_ENV: $NODE_ENV"'
-        - 'echo "REACT_APP_API_BASE_URL: $REACT_APP_API_BASE_URL"'
-        - npm run build
+        - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
+        - 'echo "NODE_ENV: ${NODE_ENV}"'
+        - 'echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"'
+        - 'echo "REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}"'
+        
+        # Build frontend with single build command
+        - CI=false npm run build
+        
+        # Backend build
         - cd ../backend
         - mkdir -p dist
-        - |
-          cp server.js server-config.js package.json package-lock.json ./dist/ && \
-          cd dist && \
-          npm ci --omit=dev && \
-          echo "exports.handler = require('./server.js').handler;" > index.js
+        - cp server.js server-config.js package.json package-lock.json ./dist/
+        - cd dist
+        - npm ci --omit=dev
+        - echo "exports.handler = require('./server.js').handler;" > index.js
         - 'echo "Backend build completed"'
+
+        # Final environment check
+        - 'echo "Final environment check"'
+        - 'echo "ENVIRONMENT: ${ENVIRONMENT}"'
+        - 'echo "REACT_APP_ENVIRONMENT: ${REACT_APP_ENVIRONMENT}"'
   artifacts:
     baseDirectory: frontend/build
     files:
