@@ -1,8 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-$version = "v2.2.2"
-$description = "fixed babel plugin error in amplify.yml. localhost functional."
+$version = "v2.2.3"
+$description = "updated babel in amplify and package to solve production build errors. localhost functional."
 
 # Add all changes
 git add .
