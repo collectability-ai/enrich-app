@@ -8,7 +8,7 @@ const ResultsPage = () => {
   const { state } = useLocation();
   const data = state?.data || {};
 
-  // Render a formatted address, leaving blank fields empty
+ // Render a formatted address, leaving blank fields empty
 const renderAddress = (address) => {
   if (!address) return "";
 
@@ -20,16 +20,16 @@ const renderAddress = (address) => {
   const city = address.city || "";
   const region = address.region || address.state || ""; // Handle "region" or "state"
   const postalCode = address.postalCode || address.zip || ""; // Handle "postalCode" or "zip"
-  const countryCode = address.countryCode || ""; // Handle "countryCode" (optional)
 
   // Check if all fields are empty
-  if (!line1 && !unit && !city && !region && !postalCode && !countryCode) {
+  if (!line1 && !unit && !city && !region && !postalCode) {
     return ""; // Return an empty string if all fields are blank
   }
 
-  // Return formatted address
-  return `${line1}${unit ? `, ${unit}` : ""}${city ? `, ${city}` : ""}${region ? `, ${region}` : ""}${postalCode ? ` ${postalCode}` : ""}${countryCode ? `, ${countryCode}` : ""}`;
+  // Return formatted address (excluding countryCode)
+  return `${line1}${unit ? `, ${unit}` : ""}${city ? `, ${city}` : ""}${region ? `, ${region}` : ""}${postalCode ? ` ${postalCode}` : ""}`;
 };
+
 
   // Render a single value, leaving it blank if undefined or null
 const renderValue = (value) => {

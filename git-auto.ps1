@@ -2,8 +2,8 @@
 
 # Set version number and description
 
-$version = "v2.2.9"
-$description = "reverted back to previous working testing build to start over, production still failed - last build still had production build errors. updated install packages. localhost functional."
+$version = "v2.3.0"
+$description = "Revamped Stripe Webhook handling to fix credit update process. Fixed Country Code error on results page. Following were tested as working on localhost: Promo code $0 payment, checkout session with no payment stored, add 2nd payment, purchase with existing payment, run search, display results. All functional on localhost."
 
 # Add all changes
 git add .
