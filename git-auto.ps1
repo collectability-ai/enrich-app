@@ -11,10 +11,10 @@ git add .
 git commit -m "${version}: ${description}"
 
 # Tag the commit with the version number
-git tag -a $version -m "Release ${version}: ${description}"
+git tag -f $version -m "Release ${version}: ${description}"
 
 # Push the commit and tag to the development branch
-git push origin development
-git push origin $version
+git push -f origin development
+git push -f origin $version
 
 Write-Host "Successfully pushed changes and created tag $version on the development branch"
