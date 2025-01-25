@@ -38,8 +38,6 @@ const awsServerlessExpress = require('aws-serverless-express');
 const path = require("path");
 const axios = require("axios");
 
-
-
 // AWS SDK imports
 const {
   GetCommand,
@@ -64,7 +62,68 @@ logger.info("Server Configuration:", {
 });
 
 // Enhanced Utility Functions
-// Enhanced Stripe Webhook Handler
+// Simplified Stripe webhook handler
+// In-memory payment tracking with cleanup
+const processedPayments = new Map(); // Using Map instead of Set to store timestamps
+
+// Cleanup function for processed payments (run periodically)
+const cleanupProcessedPayments = () => {
+  const now = Date.now();
+  for (const [paymentId, timestamp] of processedPayments.entries()) {
+    // Remove entries older than 24 hours
+    if (now - timestamp > 24 * 60 * 60 * 1000) {
+      processedPayments.delete(paymentId);
+    }
+  }
+};
+
+// Run cleanup every hour
+setInterval(cleanupProcessedPayments, 60 * 60 * 1000);
+
+// Helper function to process credit updates
+const processCreditUpdate = async (customerEmail, creditsToAdd, paymentIntentId) => {
+  try {
+    // Check if payment was already processed
+    if (processedPayments.has(paymentIntentId)) {
+      logger.info('Payment already processed:', { paymentIntentId });
+      return { success: true, skipped: true };
+    }
+
+    // Initialize user if they don't exist
+    let currentCredits = await getUserCredits(customerEmail);
+    if (currentCredits === null) {
+      await initializeUserCredits(customerEmail);
+      currentCredits = 0;
+    }
+
+    // Update credits
+    const newTotalCredits = currentCredits + creditsToAdd;
+    await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
+
+    // Mark payment as processed with timestamp
+    processedPayments.set(paymentIntentId, Date.now());
+
+    logger.info('Credits updated successfully:', {
+      customerEmail,
+      previousCredits: currentCredits,
+      addedCredits: creditsToAdd,
+      newTotalCredits,
+      paymentIntentId
+    });
+
+    return { success: true, newTotalCredits };
+  } catch (error) {
+    logger.error('Error processing credit update:', {
+      error: error.message,
+      customerEmail,
+      creditsToAdd,
+      paymentIntentId
+    });
+    throw error;
+  }
+};
+
+// Updated webhook handler
 app.post(
   '/webhook',
   express.raw({ type: 'application/json' }),
@@ -80,130 +139,71 @@ app.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      logger.info('Successfully constructed Stripe event:', {
+      logger.info('Processing webhook event:', {
         type: event.type,
-        id: event.id,
+        id: event.id
       });
 
-      const { type, data } = event;
-
-      switch (type) {
+      switch (event.type) {
         case 'checkout.session.completed': {
-          const session = data.object;
-
-          logger.info('Processing checkout.session.completed:', {
-            sessionId: session.id,
-            metadata: session.metadata,
-          });
-
-          try {
-            const customerEmail = session.metadata?.userEmail;
-            const creditsToAdd = parseInt(session.metadata?.credits, 10);
-            const sessionId = session.id;
-
-            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              throw new Error('Invalid metadata in session');
-            }
-
-            // Check if credits are already updated for this session
-            const sessionProcessed = await isSessionProcessed(sessionId);
-            if (sessionProcessed) {
-              logger.info('Credits already updated for session:', { sessionId });
-              break;
-            }
-
-            // Update User Credits
-            let currentCredits = await getUserCredits(customerEmail);
-            const newTotalCredits = currentCredits + creditsToAdd;
-
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully:', {
-              customerEmail,
-              previousCredits: currentCredits,
-              addedCredits: creditsToAdd,
-              newTotalCredits,
-            });
-
-            // Mark the session as processed
-            await markSessionProcessed(sessionId);
-
-            // Log Payment History
-            if (typeof logPaymentHistory === 'function') {
-              await logPaymentHistory(customerEmail, {
-                productId: session.metadata?.productId || 'Unknown',
-                credits: creditsToAdd || 'N/A',
-                amount: session.amount_total / 100,
-                status: 'succeeded',
-                sessionId: session.id,
-              });
-            } else {
-              logger.error('logPaymentHistory function is not defined.');
-            }
-          } catch (err) {
-            logger.error('Error processing checkout.session.completed:', {
-              error: err.message,
-              stack: err.stack,
-            });
-            throw err;
+          const session = event.data.object;
+          
+          // Only process if payment was successful
+          if (session.payment_status !== 'paid') {
+            logger.info('Skipping unpaid session:', { sessionId: session.id });
+            return response.json({ received: true });
           }
+
+          const metadata = session.metadata || {};
+          const customerEmail = metadata.userEmail;
+          const creditsToAdd = parseInt(metadata.credits, 10);
+          const paymentIntentId = session.payment_intent;
+
+          if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+            logger.warn('Invalid metadata in session:', { metadata });
+            return response.status(400).json({ error: 'Invalid metadata' });
+          }
+
+          // Process the credit update
+          await processCreditUpdate(customerEmail, creditsToAdd, paymentIntentId);
           break;
         }
 
         case 'payment_intent.succeeded': {
-          const paymentIntent = data.object;
-
-          logger.info('Processing payment_intent.succeeded:', {
-            paymentIntentId: paymentIntent.id,
-            metadata: paymentIntent.metadata,
-          });
-
+          const paymentIntent = event.data.object;
+          
+          // Skip if this is from a checkout session as it's already handled
           if (paymentIntent.metadata?.fromCheckoutSession) {
-            logger.info('Skipping payment_intent.succeeded, handled by checkout.session.completed');
-            break;
+            logger.info('Skipping payment_intent from checkout session:', { 
+              paymentIntentId: paymentIntent.id 
+            });
+            return response.json({ received: true });
           }
 
-          try {
-            const customerEmail = paymentIntent.metadata?.userEmail;
-            const creditsToAdd = parseInt(paymentIntent.metadata?.credits, 10);
+          const metadata = paymentIntent.metadata || {};
+          const customerEmail = metadata.userEmail;
+          const creditsToAdd = parseInt(metadata.credits, 10);
 
-            if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
-              throw new Error('Invalid metadata in payment intent');
-            }
-
-            // Update User Credits
-            let currentCredits = await getUserCredits(customerEmail);
-            const newTotalCredits = currentCredits + creditsToAdd;
-
-            await updateUserCreditsWithRetry(customerEmail, newTotalCredits);
-
-            logger.info('Credits updated successfully:', {
-              customerEmail,
-              previousCredits: currentCredits,
-              addedCredits: creditsToAdd,
-              newTotalCredits,
-            });
-          } catch (err) {
-            logger.error('Error processing payment_intent.succeeded:', {
-              error: err.message,
-              stack: err.stack,
-            });
-            throw err;
+          if (!customerEmail || isNaN(creditsToAdd) || creditsToAdd <= 0) {
+            logger.warn('Invalid metadata in payment intent:', { metadata });
+            return response.status(400).json({ error: 'Invalid metadata' });
           }
+
+          // Process the credit update
+          await processCreditUpdate(customerEmail, creditsToAdd, paymentIntent.id);
           break;
         }
 
         default:
-          logger.warn(`Unhandled event type: ${type}`);
+          logger.info('Unhandled event type:', { type: event.type });
       }
 
-      response.status(200).json({ received: true });
+      response.json({ received: true });
     } catch (err) {
       logger.error('Webhook error:', {
         error: err.message,
-        stack: err.stack,
+        stack: err.stack
       });
-
       response.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
