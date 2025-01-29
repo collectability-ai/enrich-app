@@ -7,6 +7,7 @@ import Dashboard from "./Dashboard";
 import InputForm from "./InputForm";
 import ResultsPage from "./ResultsPage";
 import PurchaseCredits from "./PurchaseCredits";
+import ApiAccess from "./ApiAccess";
 import Signup from "./Signup";
 import Login from "./Login";
 import VerifyEmail from "./VerifyEmail";
@@ -235,6 +236,10 @@ const App = () => {
                     <Navigate to="/login" />
                   )
                 }
+              />
+              <Route
+                path="/api-access"
+                element={isLoggedIn ? <ApiAccess /> : <Navigate to="/login" />}
               />
               <Route
                 path="/results"
