@@ -1,9 +1,8 @@
 # Script to automate Git commit, push, and versioning to the development branch
 
 # Set version number and description
-
-$version = "v2.3.0"
-$description = "Revamped Stripe Webhook handling to fix credit update process. Fixed Country Code error on results page. Following were tested as working on localhost: Promo code $0 payment, checkout session with no payment stored, add 2nd payment, purchase with existing payment, run search, display results. All functional on localhost."
+$version = "v2.3.2"
+$description = "Added: T and C enhancements on signup page, API Access menu button, and API Developer Portal placeholderpage. All functional on localhost."
 
 # Add all changes
 git add .

@@ -6,7 +6,8 @@ import {
   CreditCard, 
   LogOut,
   Menu,
-  User
+  User, 
+  Code
 } from "lucide-react";
 
 const Sidebar = ({ email, onSignOut, isCollapsed, setIsCollapsed }) => {
@@ -107,6 +108,7 @@ const Sidebar = ({ email, onSignOut, isCollapsed, setIsCollapsed }) => {
         {navButton("/dashboard", <LayoutDashboard size={20} />, "Dashboard")}
         {navButton("/search", <Search size={20} />, "Search")}
         {navButton("/purchase-credits", <CreditCard size={20} />, "Purchase Credits")}
+        {navButton("/api-access", <Code size={20} />, "API Access")}
       </div>
 
       <div className="mt-auto p-2 border-t border-gray-700">
